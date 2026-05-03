@@ -1,0 +1,45 @@
+{
+  "name": "cashmgr-app",
+  "version": "1.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "Offline-first Cash Manager (Mgr.) - Monorepo",
+  "scripts": {
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "dev:web": "pnpm --filter @cashmgr/web dev",
+    "dev:desktop": "pnpm --filter @cashmgr/desktop dev",
+    "dev:mobile": "pnpm --filter @cashmgr/mobile start",
+    "build:packages": "pnpm --filter @cashmgr/core build && pnpm --filter @cashmgr/db build && pnpm --filter @cashmgr/ui build",
+    "build:web": "pnpm --filter @cashmgr/web build",
+    "build:desktop": "pnpm --filter @cashmgr/desktop build",
+    "build:mobile": "pnpm --filter @cashmgr/mobile build",
+    "build:all": "pnpm build:packages && pnpm -r --filter './apps/*' build",
+    "clean": "rm -rf packages/*/dist apps/*/dist apps/web/.vite apps/mobile/.expo",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "keywords": [
+    "money-manager",
+    "offline-first",
+    "monorepo"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "@vitest/coverage-v8": "^1.6.1",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "metro-runtime": "^0.83.3",
+    "prettier": "^3.2.4",
+    "typescript": "^5.3.3",
+    "vitest": "^1.6.0"
+  }
+}

@@ -1,0 +1,156 @@
+import { v4 as uuidv4 } from 'uuid';
+import { Account, CreateAccountInput, UpdateAccountInput, DEFAULT_CURRENCY } from '@cashmgr/core';
+import { SqliteDatabase, SqliteValue } from '../sqlite/types.js';
+import { buildUpdateClause } from '../utils/query-builder.js';
+
+type AccountRow = {
+  id: string;
+  name: string;
+  type: Account['type'];
+  balance: number;
+  initialBalance: number;
+  currency: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+const ACCOUNT_SELECT_COLUMNS = `
+  id,
+  name,
+  type,
+  balance,
+  initial_balance as initialBalance,
+  currency,
+  created_at as createdAt,
+  updated_at as updatedAt
+`;
+
+export class AccountsRepository {
+  constructor(private readonly db: SqliteDatabase) {}
+
+  async create(input: CreateAccountInput): Promise<Account> {
+    const id = uuidv4();
+    const now = Date.now();
+    const currency = input.currency ?? DEFAULT_CURRENCY;
+    const initialBalance = input.initialBalance ?? 0;
+    const balance = initialBalance;
+
+    await this.db.execute(
+      `
+        INSERT INTO accounts (
+          id,
+          name,
+          type,
+          balance,
+          initial_balance,
+          currency,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+      `,
+      [id, input.name, input.type, balance, initialBalance, currency, now, now],
+    );
+
+    return {
+      id,
+      name: input.name,
+      type: input.type,
+      balance,
+      initialBalance,
+      currency,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  async findById(id: string): Promise<Account | null> {
+    const row = await this.getAccountRow(id);
+    return row ? this.mapRow(row) : null;
+  }
+
+  async findAll(): Promise<Account[]> {
+    const rows = await this.db.query<AccountRow>(`
+      SELECT ${ACCOUNT_SELECT_COLUMNS}
+      FROM accounts
+      ORDER BY created_at ASC;
+    `);
+
+    return rows.map((row) => this.mapRow(row));
+  }
+
+  async update(input: UpdateAccountInput): Promise<Account> {
+    const updates: Record<string, SqliteValue> = {};
+
+    if (input.name !== undefined) {
+      updates.name = input.name;
+    }
+
+    if (input.type !== undefined) {
+      updates.type = input.type;
+    }
+
+    if (input.currency !== undefined) {
+      updates.currency = input.currency;
+    }
+
+    if (input.initialBalance !== undefined) {
+      updates.initial_balance = input.initialBalance;
+    }
+
+    if (input.balance !== undefined) {
+      updates.balance = input.balance;
+    }
+
+    const { setClause, params } = buildUpdateClause(updates, true);
+
+    const result = await this.db.execute(
+      `UPDATE accounts SET ${setClause} WHERE id = ?`,
+      [...params, input.id],
+    );
+
+    if (result.rowsAffected === 0) {
+      throw new Error(`Account not found for id: ${input.id}`);
+    }
+
+    const row = await this.getAccountRow(input.id);
+    if (!row) {
+      throw new Error(`Failed to load account after update: ${input.id}`);
+    }
+
+    return this.mapRow(row);
+  }
+
+  async delete(id: string): Promise<void> {
+    const result = await this.db.execute('DELETE FROM accounts WHERE id = ?', [id]);
+    if (result.rowsAffected === 0) {
+      throw new Error(`Account not found for id: ${id}`);
+    }
+  }
+
+  private async getAccountRow(id: string): Promise<AccountRow | null> {
+    const rows = await this.db.query<AccountRow>(
+      `
+        SELECT ${ACCOUNT_SELECT_COLUMNS}
+        FROM accounts
+        WHERE id = ?
+        LIMIT 1;
+      `,
+      [id],
+    );
+
+    return rows.length ? rows[0] : null;
+  }
+
+  private mapRow(row: AccountRow): Account {
+    return {
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      balance: row.balance,
+      initialBalance: row.initialBalance,
+      currency: row.currency,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+}

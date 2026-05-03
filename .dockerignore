@@ -1,0 +1,40 @@
+# Dependencies
+node_modules
+
+# Version control
+.git
+.gitignore
+
+# Test output
+coverage
+*.lcov
+
+# Build artifacts (rebuilt inside Docker)
+dist
+build
+out
+release
+
+# Expo / React Native (not needed for web or desktop builds)
+apps/mobile/.expo
+apps/mobile/android
+apps/mobile/ios
+
+# Environment files
+.env
+.env.*
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor / OS
+.DS_Store
+.vscode
+.idea
+Thumbs.db
+
+# Claude / AI tooling
+.claude
+CLAUDE.md

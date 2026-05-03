@@ -1,0 +1,34 @@
+{
+  "name": "@cashmgr/db",
+  "version": "1.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "Database schema, migrations, and initialization for Cash Mgr.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch",
+    "seed": "NODE_ENV=development tsx scripts/seed.ts",
+    "seed:clear": "NODE_ENV=development tsx scripts/clear-seed.ts",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@cashmgr/core": "workspace:*",
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "better-sqlite3": "^11.8.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.3.3"
+  }
+}

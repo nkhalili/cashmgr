@@ -1,0 +1,10 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        MODE: development   # change to "production" for prod
+    image: cashmgr-web
+    ports:
+      - "8080:80"

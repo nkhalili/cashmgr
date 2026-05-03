@@ -1,0 +1,36 @@
+{
+  "name": "@cashmgr/web",
+  "version": "1.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@cashmgr/core": "workspace:*",
+    "@cashmgr/db": "workspace:*",
+    "@cashmgr/ui": "workspace:*",
+    "@sqlite.org/sqlite-wasm": "3.53.0-build1",
+    "comlink": "^4.4.2",
+    "idb-keyval": "^6.2.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^6.21.3",
+    "recharts": "^3.6.0",
+    "sql.js": "^1.9.0",
+    "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.11"
+  }
+}
