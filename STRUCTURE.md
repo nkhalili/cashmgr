@@ -3,7 +3,7 @@
 Complete folder tree of the Cash Mgr monorepo:
 
 ```text
-cashmgr-app/
+cashmgr/
 │
 ├── Root Configuration
 │   ├── package.json                    # Monorepo root with workspace scripts

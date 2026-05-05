@@ -27,7 +27,7 @@ Thank you for your interest in contributing. This document covers how to set up 
 ```bash
 # Clone and install
 git clone <repo-url>
-cd cashmgr-app
+cd cashmgr
 pnpm install
 
 # Run the web app
