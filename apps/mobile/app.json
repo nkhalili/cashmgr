@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Cash Mgr Mobile",
-    "slug": "cashmgr-mobile",
+    "slug": "cashmgr",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,7 +16,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cashmgr.app",
+      "bundleIdentifier": "app.cashmgr",
       "userInterfaceStyle": "automatic"
     },
     "android": {
@@ -24,7 +24,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.cashmgr.app",
+      "package": "app.cashmgr",
       "userInterfaceStyle": "automatic"
     },
     "web": {
@@ -34,6 +34,13 @@
     "plugins": [
       "expo-router",
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "522eb0ae-0f39-4987-b830-4431cbe2182c"
+      }
+    },
+    "owner": "nkhalili"
   }
 }

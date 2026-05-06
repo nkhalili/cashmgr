@@ -52,6 +52,7 @@ apps/mobile/ios/
 *.mobileprovision
 *.orig.*
 web-build/
+google-service-account.json
 
 # SQLite databases
 *.db

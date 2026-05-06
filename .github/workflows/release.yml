@@ -1,0 +1,173 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/cashmgr-web
+
+jobs:
+  # ── 1. Bump versions in all manifests and commit back to main ──────────────
+  version-bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.set.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - id: set
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Bump all version fields
+        run: node scripts/set-version.mjs ${{ steps.set.outputs.version }}
+
+      - name: Commit and push
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add .
+          git commit -m "chore: release v${{ steps.set.outputs.version }} [skip ci]"
+          git push origin HEAD:main
+
+  # ── 2. Build and push Docker image for the web app ────────────────────────
+  docker:
+    runs-on: ubuntu-latest
+    needs: version-bump
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version-bump.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+  # ── 3a. Build desktop installers (Linux AppImage + Windows NSIS) ──────────
+  desktop-linux-windows:
+    runs-on: ubuntu-latest
+    needs: version-bump
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Build Linux + Windows installers via Docker
+        run: |
+          docker build -f apps/desktop/Dockerfile \
+            --build-arg PLATFORMS="--linux --win" \
+            -t cashmgr-desktop-builder \
+            .
+
+      - name: Extract artifacts from container
+        run: |
+          docker create --name extract cashmgr-desktop-builder
+          docker cp extract:/app/apps/desktop/release ./desktop-release
+          docker rm extract
+
+      - name: Upload installers to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: desktop-release/**/*
+
+  # ── 3b. Build desktop installer (macOS DMG) ───────────────────────────────
+  desktop-macos:
+    runs-on: macos-latest
+    needs: version-bump
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build packages and desktop
+        run: |
+          pnpm --filter @cashmgr/core build
+          pnpm --filter @cashmgr/db build
+          pnpm --filter @cashmgr/ui build
+          pnpm --filter @cashmgr/web build
+          pnpm --filter @cashmgr/desktop build:electron
+
+      - name: Package macOS DMG
+        run: pnpm --filter @cashmgr/desktop exec electron-builder --mac
+
+      - name: Upload DMG to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/desktop/release/**/*
+
+  # ── 4. Build mobile apps via EAS (iOS + Android) ─────────────────────────
+  #       Requires: EXPO_TOKEN secret (create at expo.dev/settings/access-tokens)
+  #       iOS also requires Apple Developer account ($99/yr) for store distribution
+  mobile:
+    runs-on: ubuntu-latest
+    needs: version-bump
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build iOS + Android via EAS
+        run: pnpm --filter @cashmgr/mobile exec eas build --platform all --profile production --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  # ── 5. Create GitHub Release with changelog ───────────────────────────────
+  github-release:
+    runs-on: ubuntu-latest
+    needs: [version-bump, docker, desktop-linux-windows, desktop-macos, mobile]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          name: v${{ needs.version-bump.outputs.version }}
