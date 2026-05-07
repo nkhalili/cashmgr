@@ -23,7 +23,8 @@ function createWindow() {
     mainWindow.loadURL(devUrl);
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../../web/dist/index.html'));
+    // __dirname is {app.asar}/dist/ — web files are at {app.asar}/web/dist/
+    mainWindow.loadFile(path.join(__dirname, '../web/dist/index.html'));
   }
 
   mainWindow.on('closed', () => {

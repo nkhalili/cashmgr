@@ -36,7 +36,10 @@
     },
     "files": [
       "dist/**/*",
-      "../web/dist/**/*"
+      {
+        "from": "../web/dist",
+        "to": "web/dist"
+      }
     ],
     "mac": {
       "target": "dmg"

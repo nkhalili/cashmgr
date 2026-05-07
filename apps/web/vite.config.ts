@@ -13,6 +13,7 @@ export default defineConfig({
       'Cross-Origin-Embedder-Policy': 'credentialless',
     },
   },
+  base: './',
   build: {
     outDir: 'dist',
   },
