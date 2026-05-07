@@ -1,5 +1,82 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from 'electron';
 import * as path from 'path';
+import { pathToFileURL } from 'url';
+
+function buildMenu() {
+  const isMac = process.platform === 'darwin';
+  const template: Electron.MenuItemConstructorOptions[] = [
+    // macOS requires the first menu item to be the app name menu
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' as const },
+        { type: 'separator' as const },
+        { role: 'services' as const },
+        { type: 'separator' as const },
+        { role: 'hide' as const },
+        { role: 'hideOthers' as const },
+        { role: 'unhide' as const },
+        { type: 'separator' as const },
+        { role: 'quit' as const },
+      ],
+    }] : []),
+    {
+      label: 'File',
+      submenu: [
+        isMac ? { role: 'close' as const } : { role: 'quit' as const },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' as const },
+        { role: 'redo' as const },
+        { type: 'separator' as const },
+        { role: 'cut' as const },
+        { role: 'copy' as const },
+        { role: 'paste' as const },
+        { role: 'selectAll' as const },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' as const },
+        { type: 'separator' as const },
+        { role: 'resetZoom' as const },
+        { role: 'zoomIn' as const },
+        { role: 'zoomOut' as const },
+        { type: 'separator' as const },
+        { role: 'togglefullscreen' as const },
+        ...(process.env.NODE_ENV === 'development'
+          ? [{ role: 'toggleDevTools' as const }]
+          : []),
+      ],
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Report an Issue',
+          click: () => shell.openExternal('https://github.com/nkhalili/cashmgr/issues'),
+        },
+      ],
+    },
+  ];
+  return Menu.buildFromTemplate(template);
+}
+
+// Must be called before app is ready
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'app',
+  privileges: {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true,
+    allowServiceWorkers: true,
+    corsEnabled: false,
+  },
+}]);
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -14,17 +91,12 @@ function createWindow() {
     },
   });
 
-  // In development, load from Vite dev server
-  // In production, load from built web app
   if (process.env.NODE_ENV === 'development') {
     const devPort = process.env.VITE_PORT || '3000';
-    const devUrl = `http://localhost:${devPort}`;
-    console.log(`Loading from dev server: ${devUrl}`);
-    mainWindow.loadURL(devUrl);
+    mainWindow.loadURL(`http://localhost:${devPort}`);
     mainWindow.webContents.openDevTools();
   } else {
-    // __dirname is {app.asar}/dist/ — web files are at {app.asar}/web/dist/
-    mainWindow.loadFile(path.join(__dirname, '../web/dist/index.html'));
+    mainWindow.loadURL('app://localhost/');
   }
 
   mainWindow.on('closed', () => {
@@ -33,32 +105,45 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const webDistPath = path.join(__dirname, '../web/dist');
+
+  // Serve web files via app:// so we can inject COOP/COEP headers.
+  // file:// protocol has no HTTP headers, so SharedArrayBuffer (required by
+  // @sqlite.org/sqlite-wasm) would be unavailable without this.
+  protocol.handle('app', async (request) => {
+    const url = new URL(request.url);
+    let pathname = decodeURIComponent(url.pathname);
+    if (!path.extname(pathname)) pathname = '/index.html';
+    const filePath = path.join(webDistPath, pathname);
+    const response = await net.fetch(pathToFileURL(filePath).toString());
+    return new Response(response.body, {
+      status: response.status,
+      headers: {
+        ...Object.fromEntries(response.headers),
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+      },
+    });
+  });
+
+  Menu.setApplicationMenu(buildMenu());
   createWindow();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  if (process.platform !== 'darwin') app.quit();
 });
 
-// IPC handlers for database operations
 ipcMain.handle('db:query', async (_event, sql: string, params: unknown[]) => {
-  // Placeholder for database operations using better-sqlite3
-  // Will be implemented when business logic is added
   console.log('Database query:', sql, params);
   return null;
 });
 
 ipcMain.handle('db:execute', async (_event, sql: string, params: unknown[]) => {
-  // Placeholder for database operations using better-sqlite3
-  // Will be implemented when business logic is added
   console.log('Database execute:', sql, params);
   return null;
 });
