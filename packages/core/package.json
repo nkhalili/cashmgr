@@ -1,6 +1,6 @@
 {
   "name": "@cashmgr/core",
-  "version": "1.0.0",
+  "version": "0.1.0-rc.1",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Shared business logic and utilities for Cash Mgr.",
