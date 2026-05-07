@@ -1,6 +1,6 @@
 import { Currency, CreateCurrencyInput, UpdateCurrencyInput } from '@cashmgr/core';
-import { SqliteDatabase, SqliteValue } from '../sqlite/types.js';
-import { buildUpdateClause } from '../utils/query-builder.js';
+import { SqliteDatabase, SqliteValue } from '../sqlite/types';
+import { buildUpdateClause } from '../utils/query-builder';
 
 /**
  * F-030: Row type matching database schema

@@ -33,7 +33,8 @@
     "scheme": "cashmgr",
     "plugins": [
       "expo-router",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-asset"
     ],
     "extra": {
       "router": {},

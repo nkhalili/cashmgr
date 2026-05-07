@@ -5,7 +5,7 @@ import {
   buildLimitClause,
   addConditionIf,
   type Condition,
-} from '../query-builder.js';
+} from '../query-builder';
 
 describe('buildWhereClause', () => {
   it('should return empty WHERE clause for no conditions', () => {

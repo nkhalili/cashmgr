@@ -1,6 +1,6 @@
 import { FilterParams, CategoryAggregation } from '@cashmgr/core';
-import { SqliteDatabase } from '../sqlite/types.js';
-import { buildWhereClause, type Condition } from '../utils/query-builder.js';
+import { SqliteDatabase } from '../sqlite/types';
+import { buildWhereClause, type Condition } from '../utils/query-builder';
 
 /**
  * Handles aggregation queries for transactions

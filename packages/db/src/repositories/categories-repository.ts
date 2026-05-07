@@ -1,7 +1,7 @@
 import { Category, CreateCategoryInput, UpdateCategoryInput, CategoryType } from '@cashmgr/core';
-import { SqliteDatabase, SqliteValue } from '../sqlite/types.js';
+import { SqliteDatabase, SqliteValue } from '../sqlite/types';
 import { v4 as uuidv4 } from 'uuid';
-import { buildUpdateClause } from '../utils/query-builder.js';
+import { buildUpdateClause } from '../utils/query-builder';
 
 /**
  * F-003: Row type matching database schema

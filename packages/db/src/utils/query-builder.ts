@@ -1,4 +1,4 @@
-import type { SqliteValue } from '../sqlite/types.js';
+import type { SqliteValue } from '../sqlite/types';
 
 /**
  * Represents a SQL condition with its parameters

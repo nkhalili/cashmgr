@@ -9,9 +9,9 @@ import {
   CategoryAggregation,
   DEFAULT_CURRENCY,
 } from '@cashmgr/core';
-import { SqliteDatabase, SqliteValue } from '../sqlite/types.js';
-import { buildWhereClause, buildUpdateClause, buildLimitClause, type Condition } from '../utils/query-builder.js';
-import { TransactionsAggregation } from './transactions-aggregation.js';
+import { SqliteDatabase, SqliteValue } from '../sqlite/types';
+import { buildWhereClause, buildUpdateClause, buildLimitClause, type Condition } from '../utils/query-builder';
+import { TransactionsAggregation } from './transactions-aggregation';
 
 /**
  * F-002: Row type matching database schema

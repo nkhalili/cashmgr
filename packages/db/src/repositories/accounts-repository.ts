@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Account, CreateAccountInput, UpdateAccountInput, DEFAULT_CURRENCY } from '@cashmgr/core';
-import { SqliteDatabase, SqliteValue } from '../sqlite/types.js';
-import { buildUpdateClause } from '../utils/query-builder.js';
+import { SqliteDatabase, SqliteValue } from '../sqlite/types';
+import { buildUpdateClause } from '../utils/query-builder';
 
 type AccountRow = {
   id: string;
