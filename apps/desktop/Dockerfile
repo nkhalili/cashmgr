@@ -22,22 +22,24 @@
 FROM node:22-bookworm AS builder
 
 # Build tools required by better-sqlite3 (native module)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN dpkg --add-architecture i386 && \
+    apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
-    # Wine for cross-compiling Windows NSIS installer on Linux
-    wine wine64 \
+    # Wine for cross-compiling Windows NSIS installer on Linux (wine32 needed for rcedit)
+    wine wine64 wine32:i386 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
 
 # Copy workspace manifests first for better layer caching
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.json ./
 COPY packages/core/package.json ./packages/core/package.json
 COPY packages/db/package.json ./packages/db/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
 COPY apps/web/package.json ./apps/web/package.json
+COPY apps/mobile/package.json ./apps/mobile/package.json
 COPY apps/desktop/package.json ./apps/desktop/package.json
 
 RUN pnpm install --frozen-lockfile
