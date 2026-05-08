@@ -16,10 +16,18 @@ jobs:
       contents: write
     outputs:
       version: ${{ steps.set.outputs.version }}
+    if: github.actor != 'cashmgr-bot[bot]'
     steps:
+      - name: Generate App Token
+        id: generate_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.generate_token.outputs.token }}
           ref: main
 
       - id: set
@@ -34,8 +42,8 @@ jobs:
 
       - name: Commit and push
         run: |
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"
+          git config user.email "3639896+cashmgr-bot[bot]@users.noreply.github.com"
+          git config user.name "cashmgr-bot[bot]"
           git add .
           git commit -m "chore: release v${{ steps.set.outputs.version }} [skip ci]"
           git push origin HEAD:main
@@ -83,6 +91,7 @@ jobs:
       - name: Build Linux + Windows installers via Docker
         run: |
           docker build -f apps/desktop/Dockerfile \
+            --progress=plain \
             --build-arg PLATFORMS="--linux --win" \
             -t cashmgr-desktop-builder \
             .
@@ -131,6 +140,12 @@ jobs:
 
       - name: Package macOS DMG
         run: pnpm --filter @cashmgr/desktop exec electron-builder --mac
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Upload DMG to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -159,10 +174,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
       - name: Build iOS + Android via EAS
         run: pnpm --filter @cashmgr/mobile exec eas build --platform all --profile production --non-interactive
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
   # ── 5. Create GitHub Release with changelog ───────────────────────────────
   github-release:

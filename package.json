@@ -1,6 +1,6 @@
 {
   "name": "cashmgr",
-  "version": "0.1.0-rc.4",
+  "version": "0.4.0-rc.1",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Offline-first Cash Manager (Mgr.) - Monorepo",
@@ -25,9 +25,10 @@
     "offline-first",
     "monorepo"
   ],
+  "packageManager": "pnpm@9.15.4",
   "engines": {
     "node": ">=18.0.0",
-    "pnpm": ">=8.0.0"
+    "pnpm": ">=9.0.0"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^6.21.0",

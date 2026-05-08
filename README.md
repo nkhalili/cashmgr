@@ -166,6 +166,7 @@ Produces distributable packages inside the container, then copies them out.
 docker build -f apps/desktop/Dockerfile -t cashmgr-desktop-builder .
 
 # Build Linux AppImage + Windows NSIS installer (Wine is included in the image)
+# This will fail on Apple Silicon but works fine on x86_64 
 docker build -f apps/desktop/Dockerfile \
   --build-arg PLATFORMS="--linux --win" \
   -t cashmgr-desktop-builder .

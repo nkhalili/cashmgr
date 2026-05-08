@@ -54,6 +54,9 @@ importers:
         specifier: ^11.8.1
         version: 11.10.0
     devDependencies:
+      '@electron/notarize':
+        specifier: ^2.2.1
+        version: 2.2.1
       '@types/better-sqlite3':
         specifier: ^7.6.8
         version: 7.6.13
@@ -143,7 +146,7 @@ importers:
         version: 3.0.30(react-native@0.81.5(@babel/core@7.28.5)(@react-native-community/cli@12.3.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       expo-router:
         specifier: ~6.0.23
-        version: 6.0.23(05372573c45d58ac9c7a309bdc33558a)
+        version: 6.0.23(ha6xwbswvpe2yilpxbxonat4bu)
       expo-sharing:
         specifier: ^14.0.8
         version: 14.0.8(expo@54.0.34)
@@ -7769,7 +7772,7 @@ snapshots:
       wrap-ansi: 7.0.0
       ws: 8.18.3
     optionalDependencies:
-      expo-router: 6.0.23(05372573c45d58ac9c7a309bdc33558a)
+      expo-router: 6.0.23(ha6xwbswvpe2yilpxbxonat4bu)
       react-native: 0.81.5(@babel/core@7.28.5)(@react-native-community/cli@12.3.0)(@types/react@19.1.17)(react@19.1.0)
     transitivePeerDependencies:
       - bufferutil
@@ -10966,7 +10969,7 @@ snapshots:
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.28.5)(@react-native-community/cli@12.3.0)(@types/react@19.1.17)(react@19.1.0)
 
-  expo-router@6.0.23(05372573c45d58ac9c7a309bdc33558a):
+  expo-router@6.0.23(ha6xwbswvpe2yilpxbxonat4bu):
     dependencies:
       '@expo/metro-runtime': 6.1.2(expo@54.0.34)(react-dom@19.1.0(react@19.1.0))(react-native@0.81.5(@babel/core@7.28.5)(@react-native-community/cli@12.3.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       '@expo/schema-utils': 0.1.8

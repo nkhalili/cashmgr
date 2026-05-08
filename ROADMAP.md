@@ -1,15 +1,6 @@
 # Roadmap
 
-CashMgr is a local-first personal finance app. The free tier is a complete, fully-functional product — not a crippled trial. Revenue comes from offering genuine additional value (cross-device cloud sync) rather than locking core features behind a paywall.
-
-## Tiers
-
-| Tier | Price | Storage |
-| --- | --- | --- |
-| **Free** | $0, no account required | Local SQLite on each device |
-| **Paid** | Subscription (App Store / Google Play / Stripe) | Local + cloud sync across all devices |
-
-All core features (accounts, transactions, categories, budgets, reports, currencies) are available on the free tier.
+CashMgr is a local-first personal finance app. The local version is free, ad-free, and fully featured — no account required.
 
 ---
 
@@ -23,14 +14,11 @@ All core features (accounts, transactions, categories, budgets, reports, currenc
 | Multi-Currency | Exchange rates, primary currency, dashboard conversion |
 | Dashboard | Period summary, pie charts by category |
 | Web SQLite WASM + OPFS | Replaced sql.js + IndexedDB; full-speed local SQLite in the browser |
+| Data Export / Import | Available in JSON and CSV to be used for restore or migration purposes |
 
 ---
 
 ## Planned
-
-### Data Export / Import
-
-Allow users to export all data as JSON or CSV and import it back to restore or migrate across devices. Serves as the manual backup path and the downgrade path from paid to free.
 
 ### Budgets
 
@@ -44,6 +32,6 @@ Multi-period trend views beyond the current month-level dashboard: 12-month spen
 
 Full change history for all data modifications (create, update, delete) with soft-delete support and a UI to browse and restore deleted items from Settings.
 
-### Cloud Sync (Paid)
+### Cloud Sync
 
-Optional cross-device sync using PowerSync + Supabase, gated behind a subscription. Free users are unaffected — local-only storage continues to work with no account required.
+Optional cross-device sync using PowerSync + Supabase. Local-only storage continues to work with no account required.

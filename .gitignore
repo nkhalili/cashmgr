@@ -40,6 +40,8 @@ lerna-debug.log*
 # Electron
 apps/desktop/dist/
 apps/desktop/.webpack/
+apps/desktop/release/
+!apps/desktop/build/
 
 # React Native / Expo
 apps/mobile/.expo/
