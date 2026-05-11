@@ -350,7 +350,7 @@ These files are excluded from coverage requirements (untestable in current envir
 
 ### For New Features
 
-1. Check `docs/specs/` for an existing spec. If one exists, follow it.
+1. Check [issues](https://github.com/nkhalili/cashmgr/issues) or `docs/specs` (if applicable) for an existing spec. If one exists, follow it.
 2. If no spec exists, discuss the feature in an issue before implementing.
 3. Follow the [Architecture Rules](#architecture-rules) above.
 4. Use `docs/templates/service-template.ts` as a starting point for new services.
