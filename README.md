@@ -1,5 +1,7 @@
 # Cash Mgr. - Offline-First Cash Manager
 
+[![stable](https://img.shields.io/github/actions/workflow/status/nkhalili/cashmgr/ci.yml?branch=main&label=stable)](https://github.com/nkhalili/cashmgr/actions/workflows/ci.yml?query=branch%3Amain) [![dev](https://img.shields.io/github/actions/workflow/status/nkhalili/cashmgr/ci.yml?branch=dev&label=dev)](https://github.com/nkhalili/cashmgr/actions/workflows/ci.yml?query=branch%3Adev) [![Latest Release](https://img.shields.io/github/v/release/nkhalili/cashmgr)](https://github.com/nkhalili/cashmgr/releases/latest)
+
 A cross-platform, offline-first money management application built with a monorepo architecture.
 
 ## Architecture

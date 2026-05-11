@@ -251,7 +251,7 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
 
     // Upsert settings
     const now = Date.now();
-    for (const [key, value] of Object.entries(data.settings ?? {})) {
+    for (const [key, value] of Object.entries(data.settings ?? {} as Record<string, string>)) {
       await this.db.execute(
         `INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)`,
         [key, value, now],

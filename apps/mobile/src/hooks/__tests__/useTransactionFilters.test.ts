@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals';
 import { renderHook, act } from '@testing-library/react-native';
 import { useTransactionFilters } from '../useTransactionFilters';
 import type { Account, Category } from '@cashmgr/core';
@@ -339,7 +338,7 @@ describe('useTransactionFilters', () => {
       expect(result.current.debouncedSearchQuery).toBe('');
 
       // Wait for debounce (300ms)
-      await new Promise((resolve) => setTimeout(resolve, 350));
+      await new Promise<void>((resolve) => setTimeout(() => resolve(), 350));
 
       expect(result.current.debouncedSearchQuery).toBe('test query');
     });

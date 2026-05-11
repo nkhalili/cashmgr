@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+    tags-ignore: ['v*.*.*']
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @cashmgr/core build
+          pnpm --filter @cashmgr/db build
+          pnpm --filter @cashmgr/ui build
+
+      - name: Typecheck all packages
+        run: pnpm -r typecheck
+
+      - name: Build apps
+        run: |
+          pnpm --filter @cashmgr/web build
+          pnpm --filter @cashmgr/desktop build:electron
+
+      - name: Test
+        run: pnpm test
+
+  docker-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build web Docker image
+        run: docker build -f apps/web/Dockerfile -t cashmgr-web-ci .
+
+  docker-desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build desktop Linux installer
+        run: |
+          docker build -f apps/desktop/Dockerfile \
+            --progress=plain \
+            -t cashmgr-desktop-ci \
+            .

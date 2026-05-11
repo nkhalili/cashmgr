@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals';
 import { renderHook } from '@testing-library/react-native';
 import { useCategoryFormatter } from '../useCategoryFormatter';
 import type { Category, Account } from '@cashmgr/core';

@@ -1,5 +1,4 @@
 import React from 'react';
-import { describe, it, expect } from '@jest/globals';
 import { render } from '@testing-library/react-native';
 import { PieChart, PieChartData } from '../PieChart';
 
@@ -21,18 +20,18 @@ describe('PieChart', () => {
       expect(UNSAFE_root).toBeTruthy();
     });
 
-    it('should render as donut chart when type is donut', () => {
-      const { UNSAFE_root } = render(<PieChart data={mockData} type="donut" />);
+    it('should render as donut chart when innerRadius is set', () => {
+      const { UNSAFE_root } = render(<PieChart data={mockData} innerRadius={40} />);
       expect(UNSAFE_root).toBeTruthy();
     });
 
     it('should render with labels', () => {
-      const { UNSAFE_root } = render(<PieChart data={mockData} showLabels={true} />);
+      const { UNSAFE_root } = render(<PieChart data={mockData} />);
       expect(UNSAFE_root).toBeTruthy();
     });
 
-    it('should render without labels when showLabels is false', () => {
-      const { UNSAFE_root } = render(<PieChart data={mockData} showLabels={false} />);
+    it('should render without labels for small slices', () => {
+      const { UNSAFE_root } = render(<PieChart data={mockData} innerRadius={0} />);
       expect(UNSAFE_root).toBeTruthy();
     });
 

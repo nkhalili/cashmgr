@@ -1,6 +1,5 @@
 import React from 'react';
-import { describe, it, expect } from '@jest/globals';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import { SelectionModal } from '../SelectionModal';
 
 describe('SelectionModal', () => {
