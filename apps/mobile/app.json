@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Cash Mgr Mobile",
+    "name": "Cash Mgr",
     "slug": "cashmgr",
     "version": "0.4.0-rc.1",
     "orientation": "portrait",
@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#7ed0ec"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -22,7 +22,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#7ed0ec"
       },
       "package": "app.cashmgr",
       "userInterfaceStyle": "automatic"
