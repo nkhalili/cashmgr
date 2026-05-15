@@ -3,6 +3,7 @@ export * from './migrations';
 export * from './init';
 export * from './sqlite/types';
 export * from './repositories/accounts-repository';
+export * from './repositories/budgets-repository';
 export * from './repositories/currencies-repository';
 export * from './repositories/categories-repository';
 export * from './repositories/transactions-repository';

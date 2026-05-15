@@ -9,6 +9,10 @@ import {
   Currency,
   CreateCurrencyInput,
   UpdateCurrencyInput,
+  Budget,
+  BudgetWithProgress,
+  CreateBudgetInput,
+  UpdateBudgetInput,
   DatabaseAdapter,
   BulkUpsertData,
   FilterParams,
@@ -19,6 +23,7 @@ import {
   UpdateTransactionInput,
 } from '@cashmgr/core';
 import { AccountsRepository } from '../repositories/accounts-repository';
+import { BudgetsRepository } from '../repositories/budgets-repository';
 import { CategoriesRepository } from '../repositories/categories-repository';
 import { CurrenciesRepository } from '../repositories/currencies-repository';
 import { SettingsRepository } from '../repositories/settings-repository';
@@ -28,6 +33,7 @@ import { getCurrentVersion, runMigrations as runMigrationsHelper, rollbackMigrat
 
 export class SqliteDatabaseAdapter implements DatabaseAdapter {
   private readonly accountsRepository: AccountsRepository;
+  private readonly budgetsRepository: BudgetsRepository;
   private readonly categoriesRepository: CategoriesRepository;
   private readonly currenciesRepository: CurrenciesRepository;
   private readonly settingsRepository: SettingsRepository;
@@ -35,6 +41,7 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
 
   constructor(private readonly db: SqliteDatabase) {
     this.accountsRepository = new AccountsRepository(db);
+    this.budgetsRepository = new BudgetsRepository(db);
     this.categoriesRepository = new CategoriesRepository(db);
     this.currenciesRepository = new CurrenciesRepository(db);
     this.settingsRepository = new SettingsRepository(db);
@@ -257,6 +264,35 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
         [key, value, now],
       );
     }
+  }
+
+  // Budget operations (F-063)
+  async createBudget(input: CreateBudgetInput): Promise<Budget> {
+    return this.budgetsRepository.create(input);
+  }
+
+  async getBudgetById(id: string): Promise<Budget | null> {
+    return this.budgetsRepository.findById(id);
+  }
+
+  async getBudgets(month: number, year: number): Promise<Budget[]> {
+    return this.budgetsRepository.findByPeriod(month, year);
+  }
+
+  async getBudgetsWithProgress(month: number, year: number): Promise<BudgetWithProgress[]> {
+    return this.budgetsRepository.findByPeriodWithProgress(month, year);
+  }
+
+  async getBudgetDefaults(month: number, year: number): Promise<{ categoryId: string; amount: number }[]> {
+    return this.budgetsRepository.findPrecedingDefaults(month, year);
+  }
+
+  async updateBudget(input: UpdateBudgetInput): Promise<Budget> {
+    return this.budgetsRepository.update(input);
+  }
+
+  async deleteBudget(id: string): Promise<void> {
+    await this.budgetsRepository.delete(id);
   }
 
   // Migration operations (F-022)

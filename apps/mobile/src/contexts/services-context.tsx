@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MobileDatabaseAdapter } from '../database/mobile-database-adapter';
 import { AccountsService } from '../services/accounts-service';
+import { BudgetsService } from '../services/budgets-service';
 import { CategoriesService } from '../services/categories-service';
 import { CurrenciesService } from '../services/currencies-service';
 import { DashboardService } from '../services/dashboard-service';
@@ -12,6 +13,7 @@ import type { DatabaseAdapter } from '@cashmgr/core';
 interface ServicesContextValue {
   adapter: DatabaseAdapter;
   accountsService: AccountsService;
+  budgetsService: BudgetsService;
   categoriesService: CategoriesService;
   currenciesService: CurrenciesService;
   dashboardService: DashboardService;
@@ -41,6 +43,7 @@ export const ServicesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setValue({
           adapter,
           accountsService: new AccountsService(adapter),
+          budgetsService: new BudgetsService(adapter),
           categoriesService: new CategoriesService(adapter),
           currenciesService: new CurrenciesService(adapter),
           dashboardService: new DashboardService(adapter),
@@ -98,6 +101,14 @@ export function useAccountsService(): AccountsService {
     throw new Error('ServicesProvider is missing from component tree.');
   }
   return ctx.accountsService;
+}
+
+export function useBudgetsService(): BudgetsService {
+  const ctx = React.useContext(ServicesContext);
+  if (!ctx) {
+    throw new Error('ServicesProvider is missing from component tree.');
+  }
+  return ctx.budgetsService;
 }
 
 export function useCategoriesService(): CategoriesService {

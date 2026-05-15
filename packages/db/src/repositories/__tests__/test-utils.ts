@@ -72,6 +72,23 @@ const ALL_TEST_SCHEMA_STATEMENTS = [
     value TEXT NOT NULL,
     updated_at INTEGER NOT NULL
   );`,
+  // Migration 005: Budgets table
+  `CREATE TABLE IF NOT EXISTS budgets (
+    id TEXT PRIMARY KEY,
+    category_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+    UNIQUE (category_id, month, year)
+  );`,
+  'CREATE INDEX IF NOT EXISTS idx_budgets_period ON budgets(year, month);',
+  'CREATE INDEX IF NOT EXISTS idx_budgets_category ON budgets(category_id);',
+  // Migration 006: Soft-delete for budgets
+  'ALTER TABLE budgets ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0;',
+  'CREATE INDEX IF NOT EXISTS idx_budgets_active ON budgets(is_deleted);',
 ];
 
 /**

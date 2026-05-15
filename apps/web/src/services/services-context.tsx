@@ -4,6 +4,7 @@ import type { SqliteDatabase } from '@cashmgr/db';
 import { AppError, ErrorHandler } from '@cashmgr/core';
 import type { DatabaseAdapter } from '@cashmgr/core';
 import { AccountsService } from './accounts-service';
+import { BudgetsService } from './budgets-service';
 import { CategoriesService } from './categories-service';
 import { CurrenciesService } from './currencies-service';
 import { DashboardService } from './dashboard-service';
@@ -14,6 +15,7 @@ interface ServicesContextValue {
   database: SqliteDatabase;
   adapter: DatabaseAdapter;
   accountsService: AccountsService;
+  budgetsService: BudgetsService;
   categoriesService: CategoriesService;
   currenciesService: CurrenciesService;
   dashboardService: DashboardService;
@@ -41,6 +43,7 @@ export const ServicesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           database: db,
           adapter,
           accountsService: new AccountsService(adapter),
+          budgetsService: new BudgetsService(adapter),
           categoriesService: new CategoriesService(adapter),
           currenciesService: new CurrenciesService(adapter),
           dashboardService: new DashboardService(adapter),
@@ -106,6 +109,15 @@ export function useAccountsService(): AccountsService {
   }
 
   return ctx.accountsService;
+}
+
+export function useBudgetsService(): BudgetsService {
+  const ctx = React.useContext(ServicesContext);
+  if (!ctx) {
+    throw new Error('ServicesProvider is missing from component tree.');
+  }
+
+  return ctx.budgetsService;
 }
 
 export function useCategoriesService(): CategoriesService {

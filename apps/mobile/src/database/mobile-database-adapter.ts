@@ -17,9 +17,15 @@ import {
   CategoryAggregation,
   CreateCategoryInput,
   UpdateCategoryInput,
+  Budget,
+  CreateBudgetInput,
+  UpdateBudgetInput,
+  BudgetWithProgress,
   FilterParams,
   PaginationParams,
   DEFAULT_CURRENCY,
+  getMonthStartDateString,
+  getMonthEndDateString,
 } from '@cashmgr/core';
 import { migrations, type Migration } from '@cashmgr/db';
 
@@ -903,6 +909,242 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
     );
 
     return (rows[0]?.count ?? 0) > 0;
+  }
+
+  // Budget Operations (F-063)
+  async createBudget(input: CreateBudgetInput): Promise<Budget> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const now = Date.now();
+
+    // Reactivate a soft-deleted row if one exists for this (category, month, year)
+    const tombstones = await this.db.getAllAsync<{ id: string }>(
+      `SELECT id FROM budgets WHERE category_id = ? AND month = ? AND year = ? AND is_deleted = 1 LIMIT 1`,
+      [input.categoryId, input.month, input.year]
+    );
+
+    if (tombstones.length > 0) {
+      await this.db.runAsync(
+        `UPDATE budgets SET amount = ?, is_deleted = 0, updated_at = ? WHERE id = ?`,
+        [input.amount, now, tombstones[0].id]
+      );
+      const budget = await this.getBudgetById(tombstones[0].id);
+      if (!budget) throw new Error('Failed to reactivate budget');
+      await this.db.runAsync(
+        `UPDATE budgets SET is_deleted = 0, amount = ?, updated_at = ?
+         WHERE category_id = ? AND is_deleted = 1
+           AND (year * 12 + month) > (? * 12 + ?)`,
+        [input.amount, now, input.categoryId, input.year, input.month]
+      );
+      return budget;
+    }
+
+    const id = Crypto.randomUUID();
+
+    await this.db.runAsync(
+      `INSERT INTO budgets (id, category_id, amount, month, year, is_deleted, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+      [id, input.categoryId, input.amount, input.month, input.year, now, now]
+    );
+
+    await this.db.runAsync(
+      `UPDATE budgets SET is_deleted = 0, amount = ?, updated_at = ?
+       WHERE category_id = ? AND is_deleted = 1
+         AND (year * 12 + month) > (? * 12 + ?)`,
+      [input.amount, now, input.categoryId, input.year, input.month]
+    );
+
+    const budget = await this.getBudgetById(id);
+    if (!budget) throw new Error('Failed to create budget');
+    return budget;
+  }
+
+  async getBudgetById(id: string): Promise<Budget | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const rows = await this.db.getAllAsync<{
+      id: string;
+      category_id: string;
+      amount: number;
+      month: number;
+      year: number;
+      created_at: number;
+      updated_at: number;
+    }>('SELECT id, category_id, amount, month, year, created_at, updated_at FROM budgets WHERE id = ? AND is_deleted = 0', [id]);
+
+    if (rows.length === 0) return null;
+    const row = rows[0];
+    return {
+      id: row.id,
+      categoryId: row.category_id,
+      amount: row.amount,
+      month: row.month,
+      year: row.year,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  async getBudgets(month: number, year: number): Promise<Budget[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const rows = await this.db.getAllAsync<{
+      id: string;
+      category_id: string;
+      amount: number;
+      month: number;
+      year: number;
+      created_at: number;
+      updated_at: number;
+    }>(
+      'SELECT id, category_id, amount, month, year, created_at, updated_at FROM budgets WHERE month = ? AND year = ? AND is_deleted = 0 ORDER BY created_at ASC',
+      [month, year]
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      categoryId: row.category_id,
+      amount: row.amount,
+      month: row.month,
+      year: row.year,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  async getBudgetsWithProgress(month: number, year: number): Promise<BudgetWithProgress[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const startDate = getMonthStartDateString(year, month);
+    const endDate = getMonthEndDateString(year, month);
+
+    const rows = await this.db.getAllAsync<{
+      id: string;
+      category_id: string;
+      amount: number;
+      month: number;
+      year: number;
+      created_at: number;
+      updated_at: number;
+      category_name: string;
+      category_color: string | null;
+      category_icon: string | null;
+      spent: number;
+    }>(
+      `SELECT
+         b.id, b.category_id, b.amount, b.month, b.year, b.created_at, b.updated_at,
+         c.name as category_name, c.color as category_color, c.icon as category_icon,
+         COALESCE(SUM(t.amount), 0) as spent
+       FROM budgets b
+       JOIN categories c ON b.category_id = c.id
+       LEFT JOIN transactions t
+         ON t.type = 'expense'
+         AND t.date >= ? AND t.date <= ?
+         AND (
+           t.category_id = b.category_id
+           OR t.category_id IN (SELECT id FROM categories WHERE parent_id = b.category_id)
+         )
+       WHERE b.month = ? AND b.year = ? AND b.is_deleted = 0
+       GROUP BY b.id
+       ORDER BY c.name ASC`,
+      [startDate, endDate, month, year]
+    );
+
+    return rows.map((row) => {
+      const spent = row.spent;
+      const remaining = row.amount - spent;
+      const percentage = row.amount > 0 ? (spent / row.amount) * 100 : 0;
+      return {
+        id: row.id,
+        categoryId: row.category_id,
+        amount: row.amount,
+        month: row.month,
+        year: row.year,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        categoryName: row.category_name,
+        categoryColor: row.category_color ?? undefined,
+        categoryIcon: row.category_icon ?? undefined,
+        spent,
+        remaining,
+        percentage,
+      };
+    });
+  }
+
+  async updateBudget(input: UpdateBudgetInput): Promise<Budget> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const updates: string[] = [];
+    const values: (string | number)[] = [];
+
+    if (input.amount !== undefined) {
+      updates.push('amount = ?');
+      values.push(input.amount);
+    }
+
+    updates.push('updated_at = ?');
+    values.push(Date.now());
+    values.push(input.id);
+
+    await this.db.runAsync(
+      `UPDATE budgets SET ${updates.join(', ')} WHERE id = ? AND is_deleted = 0`,
+      values as any[]
+    );
+
+    const budget = await this.getBudgetById(input.id);
+    if (!budget) throw new Error('Budget not found');
+    return budget;
+  }
+
+  async deleteBudget(id: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const now = Date.now();
+
+    const rows = await this.db.getAllAsync<{ category_id: string; month: number; year: number }>(
+      'SELECT category_id, month, year FROM budgets WHERE id = ? AND is_deleted = 0 LIMIT 1',
+      [id]
+    );
+    if (rows.length === 0) throw new Error(`Budget not found for id: ${id}`);
+    const { category_id, month, year } = rows[0];
+
+    await this.db.runAsync(
+      'UPDATE budgets SET is_deleted = 1, updated_at = ? WHERE id = ? AND is_deleted = 0',
+      [now, id]
+    );
+
+    // Cascade: soft-delete all future active budgets for the same category
+    await this.db.runAsync(
+      `UPDATE budgets SET is_deleted = 1, updated_at = ?
+       WHERE category_id = ? AND is_deleted = 0
+         AND (year * 12 + month) > (? * 12 + ?)`,
+      [now, category_id, year, month]
+    );
+  }
+
+  async getBudgetDefaults(month: number, year: number): Promise<{ categoryId: string; amount: number }[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const rows = await this.db.getAllAsync<{ category_id: string; amount: number }>(
+      `SELECT b.category_id, b.amount
+       FROM budgets b
+       WHERE b.is_deleted = 0
+         AND (b.year * 12 + b.month) < (? * 12 + ?)
+         AND NOT EXISTS (
+           SELECT 1 FROM budgets ex
+           WHERE ex.category_id = b.category_id
+             AND ex.year = ? AND ex.month = ?
+         )
+         AND (b.year * 12 + b.month) = (
+           SELECT MAX(b2.year * 12 + b2.month)
+           FROM budgets b2
+           WHERE b2.category_id = b.category_id
+             AND (b2.year * 12 + b2.month) < (? * 12 + ?)
+         )`,
+      [year, month, year, month, year, month]
+    );
+    return rows.map((r) => ({ categoryId: r.category_id, amount: r.amount }));
   }
 
   // Settings Operations (F-040: Not implemented in MVP)
