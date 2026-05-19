@@ -959,6 +959,52 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
     return budget;
   }
 
+  async getAllBudgets(): Promise<Budget[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    const rows = await this.db.getAllAsync<{
+      id: string; category_id: string; amount: number;
+      month: number; year: number; created_at: number; updated_at: number;
+    }>(
+      `SELECT id, category_id, amount, month, year, created_at, updated_at
+       FROM budgets WHERE is_deleted = 0 ORDER BY year ASC, month ASC`
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      categoryId: row.category_id,
+      amount: row.amount,
+      month: row.month,
+      year: row.year,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  async getEffectiveTombstones(): Promise<Budget[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    const rows = await this.db.getAllAsync<{
+      id: string; category_id: string; amount: number;
+      month: number; year: number; created_at: number; updated_at: number;
+    }>(
+      `SELECT id, category_id, amount, month, year, created_at, updated_at
+       FROM budgets b
+       WHERE b.is_deleted = 1
+         AND (b.year * 12 + b.month) = (
+           SELECT MAX(b2.year * 12 + b2.month)
+           FROM budgets b2
+           WHERE b2.category_id = b.category_id
+         )`
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      categoryId: row.category_id,
+      amount: row.amount,
+      month: row.month,
+      year: row.year,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }
+
   async getBudgetById(id: string): Promise<Budget | null> {
     if (!this.db) throw new Error('Database not initialized');
 
@@ -1177,6 +1223,7 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
 
     if (data.clearExisting) {
       await this.db.execAsync('DELETE FROM transactions');
+      await this.db.execAsync('DELETE FROM budgets');
       await this.db.execAsync('DELETE FROM accounts');
       await this.db.execAsync('DELETE FROM categories');
       await this.db.execAsync('DELETE FROM currencies');
@@ -1243,6 +1290,26 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
           tx.notes ?? null,
           tx.createdAt, tx.updatedAt,
         ]
+      );
+    }
+
+    // Budgets (categories must already exist)
+    for (const budget of data.budgets ?? []) {
+      await this.db.runAsync(
+        `INSERT OR REPLACE INTO budgets
+          (id, category_id, amount, month, year, is_deleted, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+        [budget.id, budget.categoryId, budget.amount, budget.month, budget.year, budget.createdAt, budget.updatedAt]
+      );
+    }
+
+    // Restore effective tombstones
+    for (const budget of data.deletedBudgets ?? []) {
+      await this.db.runAsync(
+        `INSERT OR REPLACE INTO budgets
+          (id, category_id, amount, month, year, is_deleted, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+        [budget.id, budget.categoryId, budget.amount, budget.month, budget.year, budget.createdAt, budget.updatedAt]
       );
     }
 

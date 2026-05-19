@@ -376,6 +376,8 @@ export class MockDatabaseAdapter implements DatabaseAdapter {
       this.categories = [];
       this.currencies = [];
       this.transactions = [];
+      this.budgets = [];
+      this.deletedBudgetIds = new Set();
       this.settings = {};
     }
     for (const a of data.accounts ?? []) {
@@ -397,6 +399,17 @@ export class MockDatabaseAdapter implements DatabaseAdapter {
       const idx = this.transactions.findIndex((x) => x.id === t.id);
       if (idx >= 0) this.transactions[idx] = t;
       else this.transactions.push(t);
+    }
+    for (const b of data.budgets ?? []) {
+      const idx = this.budgets.findIndex((x) => x.id === b.id);
+      if (idx >= 0) this.budgets[idx] = b;
+      else this.budgets.push(b);
+    }
+    for (const b of data.deletedBudgets ?? []) {
+      const idx = this.budgets.findIndex((x) => x.id === b.id);
+      if (idx >= 0) this.budgets[idx] = b;
+      else this.budgets.push(b);
+      this.deletedBudgetIds.add(b.id);
     }
     Object.assign(this.settings, data.settings ?? {});
   }
@@ -432,6 +445,19 @@ export class MockDatabaseAdapter implements DatabaseAdapter {
         this.budgets[idx] = { ...b, amount, updatedAt: now };
       }
     }
+  }
+  async getAllBudgets(): Promise<Budget[]> {
+    return this.budgets.filter((b) => !this.deletedBudgetIds.has(b.id));
+  }
+  async getEffectiveTombstones(): Promise<Budget[]> {
+    const result: Budget[] = [];
+    const categoryIds = new Set(this.budgets.map((b) => b.categoryId));
+    for (const categoryId of categoryIds) {
+      const all = this.budgets.filter((b) => b.categoryId === categoryId);
+      const mostRecent = all.reduce((a, b) => (a.year * 12 + a.month) >= (b.year * 12 + b.month) ? a : b);
+      if (this.deletedBudgetIds.has(mostRecent.id)) result.push(mostRecent);
+    }
+    return result;
   }
   async getBudgetById(id: string): Promise<Budget | null> {
     const b = this.budgets.find((b) => b.id === id);

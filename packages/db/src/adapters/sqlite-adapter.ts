@@ -187,6 +187,7 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
     if (data.clearExisting) {
       // Delete in dependency order (transactions first, then accounts/categories)
       await this.db.execute('DELETE FROM transactions');
+      await this.db.execute('DELETE FROM budgets');
       await this.db.execute('DELETE FROM accounts');
       await this.db.execute('DELETE FROM categories');
       await this.db.execute('DELETE FROM currencies');
@@ -256,6 +257,26 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
       );
     }
 
+    // Upsert budgets (categories must already exist)
+    for (const budget of data.budgets ?? []) {
+      await this.db.execute(
+        `INSERT OR REPLACE INTO budgets
+          (id, category_id, amount, month, year, is_deleted, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+        [budget.id, budget.categoryId, budget.amount, budget.month, budget.year, budget.createdAt, budget.updatedAt],
+      );
+    }
+
+    // Restore effective tombstones
+    for (const budget of data.deletedBudgets ?? []) {
+      await this.db.execute(
+        `INSERT OR REPLACE INTO budgets
+          (id, category_id, amount, month, year, is_deleted, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+        [budget.id, budget.categoryId, budget.amount, budget.month, budget.year, budget.createdAt, budget.updatedAt],
+      );
+    }
+
     // Upsert settings
     const now = Date.now();
     for (const [key, value] of Object.entries(data.settings ?? {} as Record<string, string>)) {
@@ -277,6 +298,14 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
 
   async getBudgets(month: number, year: number): Promise<Budget[]> {
     return this.budgetsRepository.findByPeriod(month, year);
+  }
+
+  async getAllBudgets(): Promise<Budget[]> {
+    return this.budgetsRepository.findAll();
+  }
+
+  async getEffectiveTombstones(): Promise<Budget[]> {
+    return this.budgetsRepository.findEffectiveTombstones();
   }
 
   async getBudgetsWithProgress(month: number, year: number): Promise<BudgetWithProgress[]> {

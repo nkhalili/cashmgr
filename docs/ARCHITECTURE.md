@@ -166,6 +166,48 @@ apps/mobile/src/services/
 - On edit: reverse old effect, apply new effect
 - On delete: reverse transaction's effect
 
+### Export / Import Service
+
+`packages/core/src/services/export-service.ts` and `import-service.ts` implement backup/restore. Both are platform-agnostic and receive a `DatabaseAdapter` — no platform code needed.
+
+#### Backup format (`ExportBackup`, schema version 5)
+
+```typescript
+{
+  metadata: {
+    appName: 'CashMgr',
+    version: string,        // app semver
+    schemaVersion: 5,       // bumped when shape changes
+    exportDate: string,     // ISO 8601
+    platform: string,
+  },
+  data: {
+    accounts:       Account[],
+    categories:     Category[],
+    currencies:     Currency[],
+    transactions:   Transaction[],
+    budgets:        Budget[],         // active rows only
+    deletedBudgets: Budget[],         // effective tombstones only
+    settings:       Record<string, string>,
+  },
+}
+```
+
+`deletedBudgets` contains at most one row per category — the most-recent deleted row where it is also the most-recent row for that category (see [Budget Lifecycle](#budget-lifecycle-soft-delete-and-carry-forward)). This keeps backup size bounded by category count, not month count.
+
+#### Import modes
+
+| Mode | Behaviour |
+| --- | --- |
+| **replace** | Clears all existing data, imports backup, recalculates account balances from transactions |
+| **merge** | Keeps existing data; overwrites only if the backup's `updatedAt` is newer; skips duplicate transactions |
+
+#### `DatabaseAdapter` methods used
+
+- `getAllBudgets()` — returns all active budget rows across all periods
+- `getEffectiveTombstones()` — returns the effective tombstone set (at most one per category)
+- `bulkUpsert(data: BulkUpsertData)` — atomic batch write used by both modes
+
 ### Validation
 
 All input validation uses **Zod schemas** from `packages/core/src/validation/schemas.ts`. Validation runs in the service layer before any database operation. Errors are thrown as `ValidationError` (a subclass of `AppError`).

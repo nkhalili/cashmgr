@@ -36,7 +36,7 @@ export function Settings() {
       .listCurrencies(true)
       .then((list) => {
         const primary = list.find((c) => c.isPrimary);
-        setPrimaryCurrencyId(primary?.id ?? null);
+        setPrimaryCurrencyId(primary?.id ?? null);``
       })
       .catch(() => {});
   }, [currenciesService]);

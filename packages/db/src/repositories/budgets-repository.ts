@@ -97,6 +97,28 @@ export class BudgetsRepository {
     return rows.length ? this.mapRow(rows[0]) : null;
   }
 
+  async findAll(): Promise<Budget[]> {
+    const rows = await this.db.query<BudgetRow>(
+      `SELECT ${BUDGET_SELECT_COLUMNS} FROM budgets WHERE is_deleted = 0 ORDER BY year ASC, month ASC`,
+      [],
+    );
+    return rows.map((r) => this.mapRow(r));
+  }
+
+  async findEffectiveTombstones(): Promise<Budget[]> {
+    const rows = await this.db.query<BudgetRow>(
+      `SELECT ${BUDGET_SELECT_COLUMNS} FROM budgets b
+       WHERE b.is_deleted = 1
+         AND (b.year * 12 + b.month) = (
+           SELECT MAX(b2.year * 12 + b2.month)
+           FROM budgets b2
+           WHERE b2.category_id = b.category_id
+         )`,
+      [],
+    );
+    return rows.map((r) => this.mapRow(r));
+  }
+
   async findByPeriod(month: number, year: number): Promise<Budget[]> {
     const rows = await this.db.query<BudgetRow>(
       `SELECT ${BUDGET_SELECT_COLUMNS} FROM budgets

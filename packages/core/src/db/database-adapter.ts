@@ -15,6 +15,8 @@ export interface BulkUpsertData {
   categories?: Category[];
   currencies?: Currency[];
   transactions?: Transaction[];
+  budgets?: Budget[];
+  deletedBudgets?: Budget[];
   settings?: Record<string, string>;
   clearExisting?: boolean;
 }
@@ -75,6 +77,8 @@ export interface DatabaseAdapter {
   createBudget(input: CreateBudgetInput): Promise<Budget>;
   getBudgetById(id: string): Promise<Budget | null>;
   getBudgets(month: number, year: number): Promise<Budget[]>;
+  getAllBudgets(): Promise<Budget[]>;
+  getEffectiveTombstones(): Promise<Budget[]>;
   getBudgetsWithProgress(month: number, year: number): Promise<BudgetWithProgress[]>;
   getBudgetDefaults(month: number, year: number): Promise<{ categoryId: string; amount: number }[]>;
   updateBudget(input: UpdateBudgetInput): Promise<Budget>;

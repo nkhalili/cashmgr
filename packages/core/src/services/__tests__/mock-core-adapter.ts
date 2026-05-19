@@ -241,6 +241,19 @@ export class MockCoreAdapter implements DatabaseAdapter {
       }
     }
   }
+  async getAllBudgets(): Promise<Budget[]> {
+    return this.budgets.filter((b) => !this.deletedBudgetIds.has(b.id));
+  }
+  async getEffectiveTombstones(): Promise<Budget[]> {
+    const result: Budget[] = [];
+    const categoryIds = new Set(this.budgets.map((b) => b.categoryId));
+    for (const categoryId of categoryIds) {
+      const all = this.budgets.filter((b) => b.categoryId === categoryId);
+      const mostRecent = all.reduce((a, b) => (a.year * 12 + a.month) >= (b.year * 12 + b.month) ? a : b);
+      if (this.deletedBudgetIds.has(mostRecent.id)) result.push(mostRecent);
+    }
+    return result;
+  }
   async getBudgetById(id: string): Promise<Budget | null> {
     const b = this.budgets.find((b) => b.id === id);
     return b && !this.deletedBudgetIds.has(b.id) ? b : null;
@@ -319,6 +332,8 @@ export class MockCoreAdapter implements DatabaseAdapter {
       this.categories = [];
       this.currencies = [];
       this.transactions = [];
+      this.budgets = [];
+      this.deletedBudgetIds = new Set();
       this.settings = {};
     }
     const upsert = <T extends { id: string }>(arr: T[], items: T[] = []) => {
@@ -332,13 +347,20 @@ export class MockCoreAdapter implements DatabaseAdapter {
     upsert(this.categories, data.categories);
     upsert(this.currencies, data.currencies);
     upsert(this.transactions, data.transactions);
+    upsert(this.budgets, data.budgets);
+    for (const b of data.deletedBudgets ?? []) {
+      const idx = this.budgets.findIndex((x) => x.id === b.id);
+      if (idx >= 0) this.budgets[idx] = b;
+      else this.budgets.push(b);
+      this.deletedBudgetIds.add(b.id);
+    }
     Object.assign(this.settings, data.settings ?? {});
   }
 
   // Lifecycle / migrations (stubs)
   async initialize(): Promise<void> {}
   async close(): Promise<void> {}
-  async getCurrentSchemaVersion(): Promise<number> { return 4; }
+  async getCurrentSchemaVersion(): Promise<number> { return 5; }
   async runMigrations(): Promise<void> {}
   async rollbackMigration(): Promise<void> {}
 }
