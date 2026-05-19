@@ -299,17 +299,43 @@ Advantages of Android development:
 - ✅ Free for all users
 - ✅ USB port forwarding for Metro (no WiFi required)
 
-### Production Build
+### EAS Build — iOS & Android (Production)
 
-For production builds:
+Builds run locally — no cloud queue. Requires [EAS CLI](https://docs.expo.dev/eas/) and platform SDKs.
 
 ```bash
-# Create production bundle
-pnpm build
+# One-time setup
+npm install -g eas-cli
+eas login          # authenticate with your Expo account
+```
 
-# With EAS (requires Expo account)
-eas build --platform ios
-eas build --platform android
+#### Android (any machine with JDK 17 + Android SDK)
+
+```bash
+# APK for direct device install / QA
+eas build --platform android --profile preview --local
+
+# AAB for Google Play Store
+eas build --platform android --profile production --local
+```
+
+#### iOS (macOS + Xcode only)
+
+```bash
+# Ad Hoc build for real-device testing
+eas build --platform ios --profile preview --local
+
+# App Store build
+eas build --platform ios --profile production --local
+```
+
+#### Submit to Stores
+
+Fill in the placeholder values in `eas.json` first, then:
+
+```bash
+eas submit --platform ios --latest
+eas submit --platform android --latest
 ```
 
 ## Features
