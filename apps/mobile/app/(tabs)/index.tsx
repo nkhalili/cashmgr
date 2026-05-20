@@ -16,9 +16,10 @@ import type {
   DashboardSummary,
   DashboardFilter,
   PeriodMode,
+  BudgetWithProgress,
 } from '@cashmgr/core';
 import { ErrorHandler, navigateMonth as utilNavigateMonth, getMonthLabel } from '@cashmgr/core';
-import { useDashboardService } from '../../src/contexts/services-context';
+import { useDashboardService, useBudgetsService } from '../../src/contexts/services-context';
 import type { TotalBalanceResult } from '../../src/services/dashboard-service';
 import { DateInput } from '../../src/components/DateInput';
 import { PieChart } from '../../src/components/PieChart';
@@ -39,6 +40,7 @@ export default function HomeScreen() {
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const statusStyle = theme.mode === 'dark' ? 'light' : 'dark';
   const dashboardService = useDashboardService();
+  const budgetsService = useBudgetsService();
 
   const now = new Date();
   const [filter, setFilter] = React.useState<DashboardFilter>({
@@ -55,6 +57,7 @@ export default function HomeScreen() {
   const [breakdown, setBreakdown] = React.useState<CategoryAggregation[]>([]);
   const [summary, setSummary] = React.useState<DashboardSummary | null>(null);
   const [totalBalance, setTotalBalance] = React.useState<TotalBalanceResult | null>(null);
+  const [budgetMap, setBudgetMap] = React.useState<Map<string, BudgetWithProgress>>(new Map());
   const [loading, setLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [selectedSliceId, setSelectedSliceId] = React.useState<string | null>(null);
@@ -83,12 +86,19 @@ export default function HomeScreen() {
       setBreakdown(breakdownData);
       setSummary(summaryData);
       setTotalBalance(balanceData);
+
+      if (currentFilter.periodMode === 'monthly' && currentFilter.type === 'expense') {
+        const budgets = await budgetsService.getBudgetsWithProgress(currentFilter.month ?? 1, currentFilter.year);
+        setBudgetMap(new Map(budgets.map((b) => [b.categoryId, b])));
+      } else {
+        setBudgetMap(new Map());
+      }
     } catch (error) {
       // Silent fail on refresh
     } finally {
       setIsRefreshing(false);
     }
-  }, [dashboardService, buildFilter]);
+  }, [dashboardService, budgetsService, buildFilter]);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -101,10 +111,16 @@ export default function HomeScreen() {
         const breakdownData = await dashboardService.getCategoryBreakdown(currentFilter);
         const summaryData = await dashboardService.getSummary(currentFilter);
         const balanceData = await dashboardService.getTotalBalance(currentFilter);
+        let newBudgetMap = new Map<string, BudgetWithProgress>();
+        if (currentFilter.periodMode === 'monthly' && currentFilter.type === 'expense') {
+          const budgets = await budgetsService.getBudgetsWithProgress(currentFilter.month ?? 1, currentFilter.year);
+          newBudgetMap = new Map(budgets.map((b) => [b.categoryId, b]));
+        }
         if (isMounted) {
           setBreakdown(breakdownData);
           setSummary(summaryData);
           setTotalBalance(balanceData);
+          setBudgetMap(newBudgetMap);
         }
       } catch (error) {
         ErrorHandler.handle(error, 'Dashboard.loadData');
@@ -120,7 +136,7 @@ export default function HomeScreen() {
     return () => {
       isMounted = false;
     };
-  }, [dashboardService, buildFilter]);
+  }, [dashboardService, budgetsService, buildFilter]);
 
   const setType = (type: 'income' | 'expense') => {
     setFilter((prev) => ({ ...prev, type }));
@@ -377,7 +393,22 @@ export default function HomeScreen() {
                 >
                   <Text style={styles.categoryIcon}>{item.categoryIcon || '📁'}</Text>
                 </View>
-                <Text style={styles.categoryName}>{item.categoryName}</Text>
+                {/* Name + budget badge stacked vertically */}
+                <View style={styles.categoryNameColumn}>
+                  <Text style={styles.categoryName}>{item.categoryName}</Text>
+                  {filter.periodMode === 'monthly' && filter.type === 'expense' && (() => {
+                    const budget = budgetMap.get(item.categoryId);
+                    if (!budget) return null;
+                    const isOver = budget.spent > budget.amount;
+                    return (
+                      <View style={[styles.budgetBadge, isOver ? styles.budgetBadgeOver : styles.budgetBadgeOn]}>
+                        <Text style={[styles.budgetBadgeText, isOver ? styles.budgetBadgeTextOver : styles.budgetBadgeTextOn]}>
+                          {isOver ? 'Over budget' : 'On budget'}
+                        </Text>
+                      </View>
+                    );
+                  })()}
+                </View>
               </View>
               <View style={styles.categoryRight}>
                 <Text style={styles.categoryAmount}>{formatCurrency(item.total)}</Text>
@@ -616,11 +647,14 @@ const createStyles = (theme: Theme) =>
     categoryIcon: {
       fontSize: 16,
     },
+    categoryNameColumn: {
+      flex: 1,
+      flexDirection: 'column',
+    },
     categoryName: {
       fontSize: 16,
       fontWeight: fontWeight(500),
       color: theme.colors.textPrimary,
-      flex: 1,
     },
     categoryRight: {
       alignItems: 'flex-end',
@@ -634,5 +668,30 @@ const createStyles = (theme: Theme) =>
     categoryPercent: {
       fontSize: 12,
       color: theme.colors.textSecondary,
+    },
+    budgetBadge: {
+      marginTop: 2,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      borderRadius: 8,
+      alignSelf: 'flex-start',
+    },
+    budgetBadgeOn: {
+      backgroundColor: `${theme.colors.success}1a`,
+    },
+    budgetBadgeOver: {
+      backgroundColor: `${theme.colors.danger}1a`,
+    },
+    budgetBadgeText: {
+      fontSize: 9,
+      fontWeight: fontWeight(600),
+      letterSpacing: 0.3,
+      textTransform: 'uppercase',
+    },
+    budgetBadgeTextOn: {
+      color: theme.colors.success,
+    },
+    budgetBadgeTextOver: {
+      color: theme.colors.danger,
     },
   });
