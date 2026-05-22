@@ -40,7 +40,6 @@
         "ascApiKeyId": "$ASC_API_KEY_ID"
       },
       "android": {
-        "serviceAccountKeyPath": "$GOOGLE_SERVICE_ACCOUNT_JSON",
         "track": "internal"
       }
     }
