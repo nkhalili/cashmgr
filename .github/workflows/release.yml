@@ -201,7 +201,6 @@ jobs:
             | Platform | Installer | Notes |
             |----------|-----------|-------|
             | 🪟 Windows | `Cash Mgr Setup *.exe` | NSIS installer (recommended) |
-            | 🪟 Windows | `Cash Mgr *.exe` | Portable (no install needed) |
             | 🐧 Linux | `Cash Mgr-*.AppImage` | AppImage (run directly) |
             | 🍎 macOS | `Cash Mgr-*.dmg` | Drag to Applications |
 
