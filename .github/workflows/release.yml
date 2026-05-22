@@ -180,7 +180,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Build iOS + Android via EAS
-        run: pnpm --filter @cashmgr/mobile exec eas build --platform all --profile production --non-interactive
+        run: pnpm --filter @cashmgr/mobile exec eas build --platform all --profile production --non-interactive --auto-submit
 
   # ── 5. Create GitHub Release with changelog ───────────────────────────────
   github-release:
