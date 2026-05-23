@@ -5,9 +5,11 @@ on:
     branches: [main, dev]
     tags-ignore: ['v*.*.*']
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   build:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +40,7 @@ jobs:
         run: pnpm test
 
   docker-web:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +49,7 @@ jobs:
         run: docker build -f apps/web/Dockerfile -t cashmgr-web-ci .
 
   docker-desktop:
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

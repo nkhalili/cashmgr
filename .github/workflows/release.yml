@@ -161,6 +161,7 @@ jobs:
   mobile:
     runs-on: ubuntu-latest
     needs: version-bump
+    if: "!contains(github.ref_name, '-')"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -182,10 +183,37 @@ jobs:
       - name: Build iOS + Android via EAS
         run: pnpm --filter @cashmgr/mobile exec eas build --platform all --profile production --non-interactive --auto-submit
 
+  # ── 4b. Build preview mobile apps via EAS (internal distribution) ───────────
+  mobile-preview:
+    runs-on: ubuntu-latest
+    needs: version-bump
+    if: contains(github.ref_name, '-')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: pnpm/action-setup@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build preview via EAS
+        run: pnpm --filter @cashmgr/mobile exec eas build --platform all --profile preview --non-interactive
+
   # ── 5. Create GitHub Release with changelog ───────────────────────────────
   github-release:
     runs-on: ubuntu-latest
-    needs: [version-bump, docker, desktop-linux-windows, desktop-macos, mobile]
+    needs: [version-bump, docker, desktop-linux-windows, desktop-macos]
+    if: always() && !failure() && !cancelled()
     permissions:
       contents: write
     steps:
@@ -194,6 +222,7 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          prerelease: ${{ contains(github.ref_name, '-') }}
           name: v${{ needs.version-bump.outputs.version }}
           body: |
             ## Downloads
@@ -203,8 +232,6 @@ jobs:
             | 🪟 Windows | `Cash Mgr Setup *.exe` | NSIS installer (recommended) |
             | 🐧 Linux | `Cash Mgr-*.AppImage` | AppImage (run directly) |
             | 🍎 macOS | `Cash Mgr-*.dmg` | Drag to Applications |
-
-            > Auto-update is built in — once installed, Cash Mgr updates itself.
 
             ---
           append_body: true
