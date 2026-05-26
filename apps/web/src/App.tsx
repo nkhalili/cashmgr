@@ -98,7 +98,7 @@ export const App: React.FC = () => {
               ))}
             </ul>
           </nav>
-          <div style={{ marginTop: theme.spacing.lg }}>
+          <div className="theme-btn-float" style={{ marginTop: theme.spacing.lg }}>
             <Button
               variant="ghost"
               onClick={handleCycleTheme}
@@ -110,6 +110,9 @@ export const App: React.FC = () => {
             >
               Theme: {PREFERENCE_LABELS[preference]}
             </Button>
+            <p style={{ margin: `${theme.spacing.xs}px 0 0`, fontSize: 13, color: 'rgba(255,255,255,0.45)', textAlign: 'center' }}>
+              v{__APP_VERSION__}
+            </p>
           </div>
         </aside>
         <main
