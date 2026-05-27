@@ -1,22 +1,32 @@
 name: Release
 
 on:
+  pull_request:
+    types: [closed]
+    branches: [main]
   push:
-    tags: ['v*.*.*']
+    tags: ['v*.*.*-*']
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/cashmgr-web
 
 jobs:
-  # ── 1. Bump versions in all manifests and commit back to main ──────────────
+  # ── 1. Determine version and bump manifests ───────────────────────────────
+  #   Stable : triggered by merged PR from release/* into main
+  #   Preview: triggered by pre-release tag push (v*.*.*-*)
   version-bump:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
       version: ${{ steps.set.outputs.version }}
-    if: github.actor != 'cashmgr-bot[bot]'
+      prerelease: ${{ steps.set.outputs.prerelease }}
+    if: >-
+      github.actor != 'cashmgr-bot[bot]' &&
+      (github.event_name == 'push' ||
+      (github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release/')))
     steps:
       - name: Generate App Token
         id: generate_token
@@ -25,13 +35,23 @@ jobs:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
+      # For stable (PR merge): checkout main (base branch, already has merged code)
+      # For preview (tag push): checkout dev (where the bump commit will land)
       - uses: actions/checkout@v4
         with:
           token: ${{ steps.generate_token.outputs.token }}
-          ref: main
+          ref: ${{ github.base_ref || 'dev' }}
 
       - id: set
-        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            REF="${{ github.event.pull_request.head.ref }}"
+            echo "version=${REF#release/}" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          fi
 
       - uses: actions/setup-node@v4
         with:
@@ -46,7 +66,8 @@ jobs:
           git config user.name "cashmgr-bot[bot]"
           git add .
           git commit -m "chore: release v${{ steps.set.outputs.version }} [skip ci]"
-          git push origin HEAD:main
+          TARGET=${{ steps.set.outputs.prerelease == 'true' && 'dev' || 'main' }}
+          git push origin HEAD:$TARGET
 
   # ── 2. Build and push Docker image for the web app ────────────────────────
   docker:
@@ -57,8 +78,6 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -75,7 +94,7 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version-bump.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ needs.version-bump.outputs.prerelease == 'false' && format('{0}/{1}:latest', env.REGISTRY, env.IMAGE_NAME) || '' }}
 
   # ── 3a. Build desktop installers (Linux AppImage + Windows NSIS) ──────────
   desktop-linux-windows:
@@ -85,8 +104,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
 
       - name: Build Linux + Windows installers via Docker
         run: |
@@ -105,6 +122,7 @@ jobs:
       - name: Upload installers to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.version-bump.outputs.version }}
           files: |
             desktop-release/*.AppImage
             desktop-release/*.exe
@@ -119,8 +137,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
 
       - uses: pnpm/action-setup@v3
       - uses: actions/setup-node@v4
@@ -150,22 +166,21 @@ jobs:
       - name: Upload DMG to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.version-bump.outputs.version }}
           files: |
             apps/desktop/release/*.dmg
             apps/desktop/release/*.dmg.blockmap
             apps/desktop/release/latest*.yml
 
-  # ── 4. Build mobile apps via EAS (iOS + Android) ─────────────────────────
-  #       Requires: EXPO_TOKEN secret (create at expo.dev/settings/access-tokens)
-  #       iOS also requires Apple Developer account ($99/yr) for store distribution
+  # ── 4a. Build mobile apps via EAS (iOS + Android) — stable only ──────────
+  #        Requires: EXPO_TOKEN secret (create at expo.dev/settings/access-tokens)
+  #        iOS also requires Apple Developer account ($99/yr) for store distribution
   mobile:
     runs-on: ubuntu-latest
     needs: version-bump
-    if: "!contains(github.ref_name, '-')"
+    if: needs.version-bump.outputs.prerelease == 'false'
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
 
       - uses: pnpm/action-setup@v3
       - uses: actions/setup-node@v4
@@ -183,15 +198,13 @@ jobs:
       - name: Build iOS + Android via EAS
         run: pnpm --filter @cashmgr/mobile exec eas build --platform all --profile production --non-interactive --auto-submit
 
-  # ── 4b. Build preview mobile apps via EAS (internal distribution) ───────────
+  # ── 4b. Build preview mobile apps via EAS — preview only ─────────────────
   mobile-preview:
     runs-on: ubuntu-latest
     needs: version-bump
-    if: contains(github.ref_name, '-')
+    if: needs.version-bump.outputs.prerelease == 'true'
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
 
       - uses: pnpm/action-setup@v3
       - uses: actions/setup-node@v4
@@ -213,7 +226,7 @@ jobs:
   github-release:
     runs-on: ubuntu-latest
     needs: [version-bump, docker, desktop-linux-windows, desktop-macos]
-    if: always() && !failure() && !cancelled()
+    if: always() && needs.version-bump.result == 'success' && !failure() && !cancelled()
     permissions:
       contents: write
     steps:
@@ -222,8 +235,9 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          tag_name: v${{ needs.version-bump.outputs.version }}
           name: v${{ needs.version-bump.outputs.version }}
+          prerelease: ${{ needs.version-bump.outputs.prerelease == 'true' }}
           body: |
             ## Downloads
 

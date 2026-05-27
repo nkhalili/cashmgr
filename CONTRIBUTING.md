@@ -399,10 +399,10 @@ Every feature or bug fix may require doc updates. Use this table to decide what 
 
 ## Submitting a Pull Request
 
-1. Fork the repo and create a branch from `main`
+1. Fork the repo and create a branch from `dev` (features) or `main` (hotfixes).
 2. Make your changes following the conventions above
 3. Run `pnpm test` and `pnpm typecheck` — both must pass
-4. Open a PR with a clear description of what changed and why
+4. Open a PR targeting `dev` (features/bug fixes) or `main` (hotfixes) accordingly
 5. Link to any relevant issue or spec file
 
 ### PR Description Template
