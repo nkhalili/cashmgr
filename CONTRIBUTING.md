@@ -53,6 +53,18 @@ See [STRUCTURE.md](STRUCTURE.md) for the full folder tree and [docs/ARCHITECTURE
 
 ## Development Workflow
 
+### Branch Naming
+
+| Prefix | Used for | Cut from |
+| --- | --- | --- |
+| `feature/*` | New functionality | `dev` |
+| `fix/*` | Bug fixes | `dev` |
+| `hotfix/*` | Urgent production fixes | `main` |
+
+Examples: `feature/add-csv-export`, `fix/transaction-date-overflow`, `hotfix/auth-crash`
+
+All branches merge back via PR — never push directly to `dev` or `main`.
+
 ### Commands
 
 ```bash
