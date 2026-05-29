@@ -73,6 +73,12 @@ export default function SettingsScreen() {
           icon: 'cash-outline',
         },
         {
+          label: 'Budgets',
+          subtitle: 'Monthly category budgets',
+          route: '/budgets',
+          icon: 'pie-chart-outline',
+        },
+        {
           label: 'Appearance',
           subtitle: THEME_LABELS[preference] ?? 'System',
           route: '/settings-appearance',

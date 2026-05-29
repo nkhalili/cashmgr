@@ -22,7 +22,6 @@ const NAV_LINKS = [
   { label: 'Transactions', to: '/transactions', end: false },
   { label: 'Accounts', to: '/accounts', end: false },
   { label: 'Categories', to: '/categories', end: false },
-  { label: 'Budgets', to: '/budgets', end: false },
   { label: 'Settings', to: '/settings', end: false },
 ];
 
@@ -136,7 +135,7 @@ export const App: React.FC = () => {
             <Route path="/transactions/add" element={<AddTransaction />} />
             <Route path="/transactions/:id/edit" element={<AddTransaction />} />
             <Route path="/accounts" element={<Accounts />} />
-            <Route path="/budgets" element={<Budgets />} />
+            <Route path="/settings/budgets" element={<Budgets />} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/settings/currencies" element={<SettingsCurrencies />} />

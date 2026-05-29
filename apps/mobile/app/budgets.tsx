@@ -9,11 +9,11 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@cashmgr/ui';
 import { BudgetWithProgress, AppError, formatCurrency } from '@cashmgr/core';
-import { useBudgetsService, useCurrenciesService } from '../../src/contexts/services-context';
+import { useBudgetsService, useCurrenciesService } from '../src/contexts/services-context';
 
 function ProgressBar({ percentage, theme }: { percentage: number; theme: ReturnType<typeof useTheme> }) {
   const clamped = Math.min(percentage, 100);
@@ -29,7 +29,7 @@ function ProgressBar({ percentage, theme }: { percentage: number; theme: ReturnT
   );
 }
 
-export default function BudgetScreen() {
+export default function BudgetsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const budgetsService = useBudgetsService();
@@ -268,6 +268,8 @@ export default function BudgetScreen() {
 
   return (
     <View style={styles.container}>
+      <Stack.Screen options={{ title: 'Budgets', headerBackTitle: 'Settings' }} />
+
       <View style={styles.monthNav}>
         <TouchableOpacity style={styles.navButton} onPress={() => navigateMonth(-1)}>
           <Ionicons name="chevron-back" size={22} color={theme.colors.primary} />

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Button, Card, EmptyState, Input, ListItem, useTheme } from '@cashmgr/ui';
 import { AppError, BudgetWithProgress, Category } from '@cashmgr/core';
 import { useBudgetsService, useCategoriesService } from '../services/services-context';
@@ -166,12 +167,22 @@ export function Budgets() {
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
       {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.md }}>
+        <Link
+          to="/settings"
+          className="settings-breadcrumb-link"
+          style={{ color: theme.colors.primary, fontSize: theme.typography.h1.fontSize, fontWeight: theme.typography.h1.fontWeight }}
+        >
+          Settings
+        </Link>
+        <span style={{ color: theme.colors.textSecondary, fontSize: theme.typography.h1.fontSize }}>›</span>
+        <h2 style={{ margin: 0, fontSize: theme.typography.h1.fontSize, fontWeight: theme.typography.h1.fontWeight }}>
+          Budgets
+        </h2>
+      </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: theme.spacing.md, justifyContent: 'space-between' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: theme.typography.h1.fontSize, fontWeight: theme.typography.h1.fontWeight }}>
-            Budgets
-          </h2>
-          <p style={{ marginTop: theme.spacing.xs, color: theme.colors.textSecondary }}>
+          <p style={{ margin: 0, color: theme.colors.textSecondary }}>
             Set spending limits per category and track your progress.
           </p>
         </div>
