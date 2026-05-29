@@ -316,11 +316,13 @@ export async function clearSeedData(db: SqliteDatabase): Promise<void> {
   console.log('🧹 Clearing seed data...');
 
   try {
-    // Delete in reverse order due to foreign keys
+    // Delete in dependency order
     await db.execute('DELETE FROM transactions');
+    await db.execute('DELETE FROM budgets');
     await db.execute('DELETE FROM categories');
     await db.execute('DELETE FROM accounts');
     await db.execute('DELETE FROM currencies');
+    await db.execute('DELETE FROM settings');
 
     console.log('✅ All seed data cleared');
   } catch (error) {

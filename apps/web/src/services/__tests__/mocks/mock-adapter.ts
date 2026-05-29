@@ -12,11 +12,15 @@ import type {
   Category,
   Transaction,
   Currency,
+  Budget,
+  BudgetWithProgress,
   CreateAccountInput,
+  CreateBudgetInput,
   CreateCategoryInput,
   CreateCurrencyInput,
   CreateTransactionInput,
   UpdateAccountInput,
+  UpdateBudgetInput,
   UpdateCategoryInput,
   UpdateTransactionInput,
   DashboardFilter,
@@ -372,6 +376,8 @@ export class MockDatabaseAdapter implements DatabaseAdapter {
       this.categories = [];
       this.currencies = [];
       this.transactions = [];
+      this.budgets = [];
+      this.deletedBudgetIds = new Set();
       this.settings = {};
     }
     for (const a of data.accounts ?? []) {
@@ -394,13 +400,129 @@ export class MockDatabaseAdapter implements DatabaseAdapter {
       if (idx >= 0) this.transactions[idx] = t;
       else this.transactions.push(t);
     }
+    for (const b of data.budgets ?? []) {
+      const idx = this.budgets.findIndex((x) => x.id === b.id);
+      if (idx >= 0) this.budgets[idx] = b;
+      else this.budgets.push(b);
+    }
+    for (const b of data.deletedBudgets ?? []) {
+      const idx = this.budgets.findIndex((x) => x.id === b.id);
+      if (idx >= 0) this.budgets[idx] = b;
+      else this.budgets.push(b);
+      this.deletedBudgetIds.add(b.id);
+    }
     Object.assign(this.settings, data.settings ?? {});
+  }
+
+  // Budgets (F-063)
+  private budgets: Budget[] = [];
+  private deletedBudgetIds = new Set<string>();
+
+  async createBudget(input: CreateBudgetInput): Promise<Budget> {
+    const now = Date.now();
+    const createdPeriod = input.year * 12 + input.month;
+    const tombstone = this.budgets.find(
+      (b) => b.categoryId === input.categoryId && b.month === input.month && b.year === input.year && this.deletedBudgetIds.has(b.id)
+    );
+    if (tombstone) {
+      this.deletedBudgetIds.delete(tombstone.id);
+      const updated = { ...tombstone, amount: input.amount, updatedAt: now };
+      this.budgets[this.budgets.indexOf(tombstone)] = updated;
+      this.clearFutureTombstones(input.categoryId, createdPeriod, input.amount, now);
+      return updated;
+    }
+    const budget: Budget = { id: `bud-${this.idCounter++}`, ...input, createdAt: now, updatedAt: now };
+    this.budgets.push(budget);
+    this.clearFutureTombstones(input.categoryId, createdPeriod, input.amount, now);
+    return budget;
+  }
+
+  private clearFutureTombstones(categoryId: string, createdPeriod: number, amount: number, now: number): void {
+    for (const b of this.budgets) {
+      if (b.categoryId === categoryId && this.deletedBudgetIds.has(b.id) && (b.year * 12 + b.month) > createdPeriod) {
+        this.deletedBudgetIds.delete(b.id);
+        const idx = this.budgets.indexOf(b);
+        this.budgets[idx] = { ...b, amount, updatedAt: now };
+      }
+    }
+  }
+  async getAllBudgets(): Promise<Budget[]> {
+    return this.budgets.filter((b) => !this.deletedBudgetIds.has(b.id));
+  }
+  async getEffectiveTombstones(): Promise<Budget[]> {
+    const result: Budget[] = [];
+    const categoryIds = new Set(this.budgets.map((b) => b.categoryId));
+    for (const categoryId of categoryIds) {
+      const all = this.budgets.filter((b) => b.categoryId === categoryId);
+      const mostRecent = all.reduce((a, b) => (a.year * 12 + a.month) >= (b.year * 12 + b.month) ? a : b);
+      if (this.deletedBudgetIds.has(mostRecent.id)) result.push(mostRecent);
+    }
+    return result;
+  }
+  async getBudgetById(id: string): Promise<Budget | null> {
+    const b = this.budgets.find((b) => b.id === id);
+    return b && !this.deletedBudgetIds.has(b.id) ? b : null;
+  }
+  async getBudgets(month: number, year: number): Promise<Budget[]> {
+    return this.budgets.filter((b) => b.month === month && b.year === year && !this.deletedBudgetIds.has(b.id));
+  }
+  async getBudgetsWithProgress(month: number, year: number): Promise<BudgetWithProgress[]> {
+    return this.budgets
+      .filter((b) => b.month === month && b.year === year && !this.deletedBudgetIds.has(b.id))
+      .map((b) => {
+        const cat = this.categories.find((c) => c.id === b.categoryId);
+        return {
+          ...b,
+          categoryName: cat?.name ?? '',
+          categoryColor: cat?.color,
+          categoryIcon: cat?.icon,
+          spent: 0,
+          remaining: b.amount,
+          percentage: 0,
+        };
+      });
+  }
+  async getBudgetDefaults(month: number, year: number): Promise<{ categoryId: string; amount: number }[]> {
+    const requestedPeriod = year * 12 + month;
+    const existingIds = new Set(
+      this.budgets.filter((b) => b.year === year && b.month === month).map((b) => b.categoryId)
+    );
+    const latest = new Map<string, { period: number; amount: number; isDeleted: boolean }>();
+    for (const b of this.budgets) {
+      const period = b.year * 12 + b.month;
+      if (period < requestedPeriod) {
+        const cur = latest.get(b.categoryId);
+        if (!cur || period > cur.period) {
+          latest.set(b.categoryId, { period, amount: b.amount, isDeleted: this.deletedBudgetIds.has(b.id) });
+        }
+      }
+    }
+    return Array.from(latest.entries())
+      .filter(([categoryId, { isDeleted }]) => !isDeleted && !existingIds.has(categoryId))
+      .map(([categoryId, { amount }]) => ({ categoryId, amount }));
+  }
+  async updateBudget(input: UpdateBudgetInput): Promise<Budget> {
+    const idx = this.budgets.findIndex((b) => b.id === input.id && !this.deletedBudgetIds.has(b.id));
+    if (idx === -1) throw new Error(`Budget ${input.id} not found`);
+    this.budgets[idx] = { ...this.budgets[idx], ...input, updatedAt: Date.now() };
+    return this.budgets[idx];
+  }
+  async deleteBudget(id: string): Promise<void> {
+    const b = this.budgets.find((b) => b.id === id && !this.deletedBudgetIds.has(b.id));
+    if (!b) throw new Error(`Budget ${id} not found`);
+    this.deletedBudgetIds.add(id);
+    const deletedPeriod = b.year * 12 + b.month;
+    for (const other of this.budgets) {
+      if (other.categoryId === b.categoryId && !this.deletedBudgetIds.has(other.id) && (other.year * 12 + other.month) > deletedPeriod) {
+        this.deletedBudgetIds.add(other.id);
+      }
+    }
   }
 
   // Lifecycle / migrations (stubs)
   async initialize(): Promise<void> {}
   async close(): Promise<void> {}
-  async getCurrentSchemaVersion(): Promise<number> { return 4; }
+  async getCurrentSchemaVersion(): Promise<number> { return 6; }
   async runMigrations(): Promise<void> {}
   async rollbackMigration(): Promise<void> {}
 

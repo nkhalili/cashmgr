@@ -3,6 +3,7 @@ export * from './models/Transaction';
 export * from './models/Account';
 export * from './models/Category';
 export * from './models/Currency';
+export * from './models/Budget';
 
 // Types
 export * from './types';

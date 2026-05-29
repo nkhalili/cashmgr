@@ -10,9 +10,11 @@ CashMgr is a personal finance app that helps you track income, expenses, and tra
 2. [Accounts](#accounts)
 3. [Transactions](#transactions)
 4. [Categories](#categories)
-5. [Dashboard](#dashboard)
-6. [Currencies](#currencies)
-7. [Tips & Tricks](#tips--tricks)
+5. [Budgets](#budgets)
+6. [Dashboard](#dashboard)
+7. [Currencies](#currencies)
+8. [Settings & Data Management](#settings--data-management)
+9. [Tips & Tricks](#tips--tricks)
 
 ---
 
@@ -182,6 +184,62 @@ Tap any category to edit its name, icon, color, or parent. To delete, tap the de
 
 ---
 
+## Budgets
+
+Budgets let you set monthly spending limits per expense category and track your progress throughout the month.
+
+### How Budgets Work
+
+- Each budget is tied to one expense category and one calendar month
+- Spending is calculated automatically from your transactions — no manual entry needed
+- Subcategory spending rolls up into the parent category's budget (e.g. transactions in "Restaurants" count toward a "Food" budget)
+- You can have at most one budget per category per month
+
+### Recurring Defaults (Auto Carry-Forward)
+
+When you set a budget for a category, that amount becomes the **default** for every future month. You only need to set it once — the app automatically carries it forward when you navigate to each new month. If you want to change the limit for a particular month, just edit that month's budget; other months are not affected.
+
+### Creating a Budget
+
+1. Go to **Settings → Budgets**
+2. Navigate to the month you want using the `‹ Month ›` navigator
+3. Tap **Add budget**
+4. Select an expense category from the list (only categories without an existing budget for the month are shown)
+5. Enter an amount — your spending limit for the month
+6. Tap **Create budget**
+
+Future months are created on demand the first time you visit them, so you don't need to set anything up in advance.
+
+### Reading the Progress Bar
+
+Each budget card shows a progress bar and a spending summary:
+
+| Color | Meaning |
+| --- | --- |
+| **Green** | Under 70% spent — on track |
+| **Amber** | 70–89% spent — approaching the limit |
+| **Red** | 90% or over — limit reached or exceeded |
+
+Below the bar you'll see the percentage used and either the remaining amount or how much you've gone over.
+
+### Editing a Budget
+
+Tap **Edit** on any budget to update the spending limit. The progress bar updates immediately to reflect the new limit. You cannot change the category or month of an existing budget — delete it and create a new one instead.
+
+Editing one month's budget does not affect other months.
+
+### Deleting a Budget
+
+Tap **Delete** on any budget and confirm. This stops the carry-forward for that category — the current month and all future months lose their budget for it. Past months and your transactions are not affected.
+
+If you want to resume tracking that category, add a new budget for any month. The carry-forward restarts from that month: all previously deleted future months are restored with the new amount.
+
+### Navigating Months
+
+Use the `‹` and `›` buttons to move between months. You can review past months to see how your spending compared to your limits, or set up budgets for future months in advance.
+
+---
+
 ## Dashboard
 
 The Dashboard gives you a financial overview for any time period.
@@ -214,6 +272,17 @@ Two pie charts show how your money is distributed:
 
 Tap a category slice to highlight it. The legend below shows each category's amount and percentage.
 
+### Category Breakdown & Budget Status
+
+In **monthly expense** view, each category row shows a small badge under the category name:
+
+| Badge | Meaning |
+| --- | --- |
+| **On budget** (green) | Spending is within the budget limit for this month |
+| **Over budget** (red) | Spending has exceeded the budget limit for this month |
+
+Categories with no budget set for the month show no badge. The badge only appears in monthly mode — yearly and custom ranges don't map to a single month's budget.
+
 ### Multi-Currency
 
 If you have accounts in different currencies, the dashboard converts everything to your primary currency using the exchange rates you've set. See [Currencies](#currencies) below.
@@ -244,6 +313,36 @@ Open **Settings** → **Currencies**, tap **Edit** next to a currency, then tap 
 ### Using Different Currencies on Accounts
 
 When creating or editing an account, select its currency. Transactions on that account default to the account's currency.
+
+---
+
+## Settings & Data Management
+
+### Backup & Restore
+
+CashMgr can export all your data to a JSON backup file and restore it on any device.
+
+#### Creating a Backup
+
+1. Go to **Settings**
+2. Tap **Export Data (JSON)**
+3. Save or share the `.json` file
+
+The backup includes accounts, categories, currencies, transactions, budgets (active and deleted), and settings. Budget tombstones (carry-forward stop signals) are included so that paused categories stay paused after a restore.
+
+#### Restoring a Backup
+
+1. Go to **Settings**
+2. Tap **Import Data**
+3. Select your `.json` backup file
+4. Preview the counts and choose a mode:
+   - **Replace** — clears everything and loads the backup fresh. Use this to restore to a previous state.
+   - **Merge** — keeps existing data and adds anything newer from the backup. Use this to sync data from another device.
+5. Confirm to proceed
+
+**Replace mode** recalculates all account balances from transactions after import, so your balances will be accurate even if the backup's stored balances were stale.
+
+**Merge mode** compares `updatedAt` timestamps: the backup version wins only if it is newer than the local version.
 
 ---
 

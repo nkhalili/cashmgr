@@ -96,6 +96,22 @@ Indexes: `idx_transactions_account_id`, `idx_transactions_date`, `idx_transactio
 | createdAt | number | NO | — | Unix timestamp ms |
 | updatedAt | number | NO | — | Unix timestamp ms |
 
+### `budgets`
+
+| Field | Type | Nullable | Default | Notes |
+| --- | --- | --- | --- | --- |
+| id | string | NO | uuid | Primary key |
+| categoryId | string | NO | — | FK → categories (ON DELETE CASCADE) |
+| amount | number | NO | — | Positive number — the spending limit |
+| month | integer | NO | — | 1–12 |
+| year | integer | NO | — | Four-digit year |
+| isDeleted | boolean | NO | 0 | Soft-delete flag — see Budget Lifecycle below |
+| createdAt | number | NO | — | Unix timestamp ms |
+| updatedAt | number | NO | — | Unix timestamp ms |
+
+Unique constraint: `(category_id, month, year)` — one budget per category per month.
+Indexes: `idx_budgets_period` on `(year, month)`, `idx_budgets_category` on `category_id`, `idx_budgets_active` on `(is_deleted)`
+
 ### `settings`
 
 | Field | Type | Notes |
@@ -150,6 +166,48 @@ apps/mobile/src/services/
 - On edit: reverse old effect, apply new effect
 - On delete: reverse transaction's effect
 
+### Export / Import Service
+
+`packages/core/src/services/export-service.ts` and `import-service.ts` implement backup/restore. Both are platform-agnostic and receive a `DatabaseAdapter` — no platform code needed.
+
+#### Backup format (`ExportBackup`, schema version 5)
+
+```typescript
+{
+  metadata: {
+    appName: 'CashMgr',
+    version: string,        // app semver
+    schemaVersion: 5,       // bumped when shape changes
+    exportDate: string,     // ISO 8601
+    platform: string,
+  },
+  data: {
+    accounts:       Account[],
+    categories:     Category[],
+    currencies:     Currency[],
+    transactions:   Transaction[],
+    budgets:        Budget[],         // active rows only
+    deletedBudgets: Budget[],         // effective tombstones only
+    settings:       Record<string, string>,
+  },
+}
+```
+
+`deletedBudgets` contains at most one row per category — the most-recent deleted row where it is also the most-recent row for that category (see [Budget Lifecycle](#budget-lifecycle-soft-delete-and-carry-forward)). This keeps backup size bounded by category count, not month count.
+
+#### Import modes
+
+| Mode | Behaviour |
+| --- | --- |
+| **replace** | Clears all existing data, imports backup, recalculates account balances from transactions |
+| **merge** | Keeps existing data; overwrites only if the backup's `updatedAt` is newer; skips duplicate transactions |
+
+#### `DatabaseAdapter` methods used
+
+- `getAllBudgets()` — returns all active budget rows across all periods
+- `getEffectiveTombstones()` — returns the effective tombstone set (at most one per category)
+- `bulkUpsert(data: BulkUpsertData)` — atomic batch write used by both modes
+
 ### Validation
 
 All input validation uses **Zod schemas** from `packages/core/src/validation/schemas.ts`. Validation runs in the service layer before any database operation. Errors are thrown as `ValidationError` (a subclass of `AppError`).
@@ -170,6 +228,50 @@ Use `ErrorHandler.handle()` for consistent logging. React `ErrorBoundary` is use
 ### Migration System
 
 Database migrations are in `packages/db/src/migrations/`. Each migration implements `{ version, up: string, down: string }`. The runner tracks applied versions in `schema_migrations` and runs pending migrations on app startup.
+
+### Budget Lifecycle (Soft-Delete and Carry-Forward)
+
+Budgets use a soft-delete pattern to support automatic monthly carry-forward without losing history.
+
+#### `is_deleted` flag
+
+Rows are never physically removed. Instead, `is_deleted = 1` marks a row as a *tombstone*. All read queries filter `AND is_deleted = 0`. A tombstone for period P acts as a *stop signal* — it blocks carry-forward propagation for that category past P.
+
+#### Auto carry-forward
+
+`getBudgetsWithProgress(month, year)` (service layer, current/future months only) calls `getBudgetDefaults(month, year)` first. That query finds the most-recent prior active row per category that has no existing row (active or deleted) for the requested period. The service then calls `createBudget` for each result, creating rows on demand — one month at a time, only when navigated to.
+
+#### Tombstone reactivation
+
+`createBudget` checks for a soft-deleted row matching `(categoryId, month, year)` before inserting. If found, it reactivates the existing row (`is_deleted = 0`, new amount) instead of inserting a duplicate. This preserves the unique constraint.
+
+#### Cascade delete
+
+Deleting a budget soft-deletes the target row *and* all future active rows for the same category:
+
+```sql
+UPDATE budgets SET is_deleted = 1
+WHERE category_id = ? AND is_deleted = 0
+  AND (year * 12 + month) > (? * 12 + ?)
+```
+
+This cleans up already-created future rows so they disappear immediately without waiting for the stop-signal to take effect.
+
+#### Cascade create (resume)
+
+Creating or reactivating a budget for month M clears all future tombstones for the same category *and* updates their amounts to match:
+
+```sql
+UPDATE budgets SET is_deleted = 0, amount = ?
+WHERE category_id = ? AND is_deleted = 1
+  AND (year * 12 + month) > (? * 12 + ?)
+```
+
+This resumes carry-forward from M with the new amount, restoring all future months in one operation.
+
+#### Period math
+
+`year * 12 + month` is used as an ordinal throughout — both in SQL expressions and in-memory mock logic — to compare calendar periods without date parsing.
 
 ### Date Handling
 

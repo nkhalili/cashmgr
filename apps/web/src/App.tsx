@@ -4,6 +4,7 @@ import { Button, useTheme } from '@cashmgr/ui';
 import { Dashboard } from './pages/Dashboard';
 import { Transactions } from './pages/Transactions';
 import { AddTransaction } from './pages/AddTransaction';
+import { Budgets } from './pages/Budgets';
 import { Categories } from './pages/Categories';
 import { Accounts } from './pages/Accounts';
 import { Settings } from './pages/Settings';
@@ -134,6 +135,7 @@ export const App: React.FC = () => {
             <Route path="/transactions/add" element={<AddTransaction />} />
             <Route path="/transactions/:id/edit" element={<AddTransaction />} />
             <Route path="/accounts" element={<Accounts />} />
+            <Route path="/settings/budgets" element={<Budgets />} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/settings/currencies" element={<SettingsCurrencies />} />

@@ -2,6 +2,7 @@ import { Transaction, CreateTransactionInput, UpdateTransactionInput } from '../
 import { Account, CreateAccountInput, UpdateAccountInput } from '../models/Account';
 import { Category, CreateCategoryInput, UpdateCategoryInput } from '../models/Category';
 import { Currency, CreateCurrencyInput, UpdateCurrencyInput } from '../models/Currency';
+import { Budget, CreateBudgetInput, UpdateBudgetInput, BudgetWithProgress } from '../models/Budget';
 import { CategoryType, CategoryAggregation, FilterParams, PaginationParams } from '../types';
 
 /**
@@ -14,6 +15,8 @@ export interface BulkUpsertData {
   categories?: Category[];
   currencies?: Currency[];
   transactions?: Transaction[];
+  budgets?: Budget[];
+  deletedBudgets?: Budget[];
   settings?: Record<string, string>;
   clearExisting?: boolean;
 }
@@ -69,6 +72,17 @@ export interface DatabaseAdapter {
   // F-062: Export/Import operations
   getAllSettings(): Promise<Record<string, string>>;
   bulkUpsert(data: BulkUpsertData): Promise<void>;
+
+  // Budget operations (F-063)
+  createBudget(input: CreateBudgetInput): Promise<Budget>;
+  getBudgetById(id: string): Promise<Budget | null>;
+  getBudgets(month: number, year: number): Promise<Budget[]>;
+  getAllBudgets(): Promise<Budget[]>;
+  getEffectiveTombstones(): Promise<Budget[]>;
+  getBudgetsWithProgress(month: number, year: number): Promise<BudgetWithProgress[]>;
+  getBudgetDefaults(month: number, year: number): Promise<{ categoryId: string; amount: number }[]>;
+  updateBudget(input: UpdateBudgetInput): Promise<Budget>;
+  deleteBudget(id: string): Promise<void>;
 
   // Migration operations (F-022)
   getCurrentSchemaVersion(): Promise<number>;

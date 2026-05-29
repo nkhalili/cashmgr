@@ -26,7 +26,11 @@ function makeBackup(overrides: Partial<ExportBackup> = {}): string {
       transactions: [
         { id: 'tx-1', type: 'income', amount: 50, currency: 'USD', date: '2026-01-15', accountId: 'acc-1', categoryId: 'cat-1', createdAt: 1000, updatedAt: 1000 },
       ],
-      settings: { primary_currency: 'USD' },
+      budgets: [
+        { id: 'bud-1', categoryId: 'cat-1', amount: 200, month: 1, year: 2026, createdAt: 1000, updatedAt: 1000 },
+      ],
+      deletedBudgets: [],
+      settings: {},
     },
     ...overrides,
   };
@@ -110,7 +114,7 @@ describe('previewImport', () => {
   it('handles empty data arrays without errors', () => {
     const backup: ExportBackup = {
       metadata: { appName: 'CashMgr', version: '1.0.0', schemaVersion: EXPORT_SCHEMA_VERSION, exportDate: '', platform: '' },
-      data: { accounts: [], categories: [], currencies: [], transactions: [], settings: {} },
+      data: { accounts: [], categories: [], currencies: [], transactions: [], budgets: [], deletedBudgets: [], settings: {} },
     };
     const preview = previewImport(JSON.stringify(backup));
     expect(preview.isValid).toBe(true);
@@ -274,7 +278,7 @@ describe('importData', () => {
         transactions: [
           { id: 'tx-1', type: 'income', amount: 100, currency: 'USD', date: '2026-01-10', accountId: 'acc-1', categoryId: 'cat-1', createdAt: 1000, updatedAt: 1000 },
         ],
-        settings: { primary_currency: 'USD' },
+        settings: {},
       });
 
       const exportResult = await exportData(adapter, { format: 'json' });

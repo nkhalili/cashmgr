@@ -386,6 +386,30 @@ export function validateTransactionBusinessRules(input: {
 }
 
 /**
+ * Budget Schemas
+ * F-063: Monthly budget per category
+ */
+export const CreateBudgetInputSchema = z
+  .object({
+    categoryId: z.string().min(1, 'Category is required'),
+    amount: z.number().positive('Budget amount must be positive'),
+    month: z.number().int().min(1).max(12),
+    year: z.number().int().min(2000).max(2100),
+  })
+  .strict();
+
+export const UpdateBudgetInputSchema = z
+  .object({
+    id: z.string().min(1, 'Budget ID is required'),
+    amount: z.number().positive('Budget amount must be positive').optional(),
+  })
+  .strict()
+  .refine((data) => {
+    const { id, ...rest } = data;
+    return Object.keys(rest).length > 0;
+  }, 'At least one field must be provided for update');
+
+/**
  * Transaction Filter Schema
  * F-002: Validates transaction filter parameters
  */

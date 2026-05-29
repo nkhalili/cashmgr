@@ -15,8 +15,8 @@ import {
   useTheme,
   getCategoryColor,
 } from '@cashmgr/ui';
-import type { CategoryAggregation, DashboardSummary, DashboardFilter, PeriodMode } from '@cashmgr/core';
-import { useDashboardService } from '../services/services-context';
+import type { CategoryAggregation, DashboardSummary, DashboardFilter, PeriodMode, BudgetWithProgress } from '@cashmgr/core';
+import { useDashboardService, useBudgetsService } from '../services/services-context';
 import { formatCurrency, ErrorHandler, navigateMonth as navigateMonthUtil, getMonthLabel } from '@cashmgr/core';
 import type { TotalBalanceResult } from '../services/dashboard-service';
 import { renderCustomLabel, type LabelPosition } from '../utils/pie-chart-labels';
@@ -25,6 +25,7 @@ import { MonthNavigator } from '../components/MonthNavigator';
 export function Dashboard() {
   const theme = useTheme();
   const dashboardService = useDashboardService();
+  const budgetsService = useBudgetsService();
 
   // Current date for defaults
   const now = new Date();
@@ -41,6 +42,7 @@ export function Dashboard() {
   const [categoryBreakdown, setCategoryBreakdown] = React.useState<CategoryAggregation[]>([]);
   const [summary, setSummary] = React.useState<DashboardSummary>({ totalIncome: 0, totalExpenses: 0, netBalance: 0 });
   const [totalBalance, setTotalBalance] = React.useState<TotalBalanceResult | null>(null);
+  const [budgetMap, setBudgetMap] = React.useState<Map<string, BudgetWithProgress>>(new Map());
   const [loading, setLoading] = React.useState(true);
 
   // Build filter object
@@ -88,12 +90,19 @@ export function Dashboard() {
       setCategoryBreakdown(breakdown);
       setSummary(summaryData);
       setTotalBalance(balanceData);
+
+      if (periodMode === 'monthly' && transactionType === 'expense') {
+        const budgets = await budgetsService.getBudgetsWithProgress(selectedMonth + 1, selectedYear);
+        setBudgetMap(new Map(budgets.map((b) => [b.categoryId, b])));
+      } else {
+        setBudgetMap(new Map());
+      }
     } catch (error) {
       ErrorHandler.handle(error, 'Dashboard.loadData');
     } finally {
       setLoading(false);
     }
-  }, [dashboardService, buildFilter]);
+  }, [dashboardService, budgetsService, buildFilter, periodMode, transactionType, selectedMonth, selectedYear]);
 
   React.useEffect(() => {
     loadData();
@@ -539,10 +548,19 @@ export function Dashboard() {
                   >
                     {category.categoryIcon || ''}
                   </span>
-                  {/* Name */}
-                  <span style={{ flex: 1, color: theme.colors.textPrimary }}>
-                    {category.categoryName}
-                  </span>
+                  {/* Name + budget badge stacked vertically */}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <span style={{ color: theme.colors.textPrimary }}>
+                      {category.categoryName}
+                    </span>
+                    {periodMode === 'monthly' && transactionType === 'expense' && (() => {
+                      const budget = budgetMap.get(category.categoryId);
+                      if (!budget) return null;
+                      return budget.spent > budget.amount
+                        ? <Badge label="Over budget" tone="danger" style={{ fontSize: 9, padding: '1px 5px', alignSelf: 'flex-start' }} />
+                        : <Badge label="On budget" tone="success" style={{ fontSize: 9, padding: '1px 5px', alignSelf: 'flex-start' }} />;
+                    })()}
+                  </div>
                   {/* Amount */}
                   <span
                     style={{

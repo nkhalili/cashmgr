@@ -207,6 +207,71 @@ const MIGRATION_004: Migration = {
 };
 
 /**
+ * Migration 005: Budgets Table
+ * F-063: Monthly per-category expense budgets
+ */
+const MIGRATION_005: Migration = {
+  version: 5,
+  description: 'Add budgets table for monthly category budgets',
+  up: [
+    `CREATE TABLE IF NOT EXISTS budgets (
+      id TEXT PRIMARY KEY,
+      category_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      month INTEGER NOT NULL,
+      year INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+      UNIQUE (category_id, month, year)
+    );`,
+    'CREATE INDEX IF NOT EXISTS idx_budgets_period ON budgets(year, month);',
+    'CREATE INDEX IF NOT EXISTS idx_budgets_category ON budgets(category_id);',
+  ],
+  down: [
+    'DROP INDEX IF EXISTS idx_budgets_category;',
+    'DROP INDEX IF EXISTS idx_budgets_period;',
+    'DROP TABLE IF EXISTS budgets;',
+  ],
+};
+
+/**
+ * Migration 006: Soft-delete for budgets
+ * Adds is_deleted flag so deletions act as stop signals for auto-carry-forward.
+ */
+const MIGRATION_006: Migration = {
+  version: 6,
+  description: 'Add is_deleted column to budgets for soft-delete support',
+  up: [
+    'ALTER TABLE budgets ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0;',
+    'CREATE INDEX IF NOT EXISTS idx_budgets_active ON budgets(is_deleted);',
+  ],
+  down: [
+    'DROP INDEX IF EXISTS idx_budgets_active;',
+    // SQLite does not support DROP COLUMN before version 3.35 — rebuild the table
+    `CREATE TABLE IF NOT EXISTS budgets_old AS SELECT id, category_id, amount, month, year, created_at, updated_at FROM budgets WHERE is_deleted = 0;`,
+    'DROP TABLE budgets;',
+    'ALTER TABLE budgets_old RENAME TO budgets;',
+  ],
+};
+
+/**
+ * Migration 007: Remove redundant primary_currency setting
+ * currencies.is_primary is the source of truth; the settings key was never read back.
+ */
+const MIGRATION_007: Migration = {
+  version: 7,
+  description: 'Remove redundant primary_currency from settings table',
+  up: [
+    `DELETE FROM settings WHERE key = 'primary_currency';`,
+  ],
+  down: [
+    `INSERT OR IGNORE INTO settings (key, value, updated_at)
+     SELECT id, id, strftime('%s','now') * 1000 FROM currencies WHERE is_primary = 1 LIMIT 1;`,
+  ],
+};
+
+/**
  * All migrations in order
  * IMPORTANT: Never modify existing migrations!
  * Always add new migrations with incremented version numbers.
@@ -216,6 +281,9 @@ export const migrations: Migration[] = [
   MIGRATION_002,
   MIGRATION_003,
   MIGRATION_004,
+  MIGRATION_005,
+  MIGRATION_006,
+  MIGRATION_007,
   // Future migrations go here
 ];
 

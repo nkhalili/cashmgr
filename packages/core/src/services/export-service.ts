@@ -3,13 +3,14 @@ import type { Account } from '../models/Account';
 import type { Category } from '../models/Category';
 import type { Currency } from '../models/Currency';
 import type { Transaction } from '../models/Transaction';
+import type { Budget } from '../models/Budget';
 import { getTodayDateString } from '../utils/date';
 
-export const EXPORT_SCHEMA_VERSION = 4;
+export const EXPORT_SCHEMA_VERSION = 5;
 
 export interface ExportOptions {
   format: 'json' | 'csv';
-  entities?: ('accounts' | 'transactions' | 'categories' | 'currencies' | 'settings')[];
+  entities?: ('accounts' | 'transactions' | 'categories' | 'currencies' | 'budgets' | 'settings')[];
   dateRange?: { startDate: string; endDate: string };
   platform?: string;
 }
@@ -33,6 +34,8 @@ export interface ExportBackup {
     categories: Category[];
     currencies: Currency[];
     transactions: Transaction[];
+    budgets: Budget[];
+    deletedBudgets: Budget[];
     settings: Record<string, string>;
   };
 }
@@ -72,13 +75,15 @@ async function exportJSON(
   options: ExportOptions,
   today: string,
 ): Promise<ExportResult> {
-  const entities = options.entities ?? ['accounts', 'transactions', 'categories', 'currencies', 'settings'];
+  const entities = options.entities ?? ['accounts', 'transactions', 'categories', 'currencies', 'budgets', 'settings'];
 
   const data: ExportBackup['data'] = {
     accounts: [],
     categories: [],
     currencies: [],
     transactions: [],
+    budgets: [],
+    deletedBudgets: [],
     settings: {},
   };
 
@@ -93,6 +98,10 @@ async function exportJSON(
   }
   if (entities.includes('transactions')) {
     data.transactions = await fetchAllTransactions(db, options.dateRange);
+  }
+  if (entities.includes('budgets')) {
+    data.budgets = await db.getAllBudgets();
+    data.deletedBudgets = await db.getEffectiveTombstones();
   }
   if (entities.includes('settings')) {
     data.settings = await db.getAllSettings();
@@ -160,3 +169,4 @@ async function exportCSV(
     mimeType: 'text/csv',
   };
 }
+
