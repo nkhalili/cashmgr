@@ -21,7 +21,7 @@ describe('DashboardService (mobile)', () => {
     let categoryId: string;
 
     beforeEach(async () => {
-      const account = await adapter.createAccount({ name: 'Cash', type: 'cash', currency: 'USD' });
+      const account = await adapter.createAccount({ name: 'Cash', type: 'cash', initialBalance: 0, currency: 'USD' });
       const category = await adapter.createCategory({ name: 'Food', type: 'expense' });
       accountId = account.id;
       categoryId = category.id;
