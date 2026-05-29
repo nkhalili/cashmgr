@@ -201,7 +201,7 @@ When you set a budget for a category, that amount becomes the **default** for ev
 
 ### Creating a Budget
 
-1. Go to the **Budgets** screen
+1. Go to **Settings → Budgets**
 2. Navigate to the month you want using the `‹ Month ›` navigator
 3. Tap **Add budget**
 4. Select an expense category from the list (only categories without an existing budget for the month are shown)
