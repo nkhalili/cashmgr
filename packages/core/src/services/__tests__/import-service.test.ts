@@ -30,7 +30,7 @@ function makeBackup(overrides: Partial<ExportBackup> = {}): string {
         { id: 'bud-1', categoryId: 'cat-1', amount: 200, month: 1, year: 2026, createdAt: 1000, updatedAt: 1000 },
       ],
       deletedBudgets: [],
-      settings: { primary_currency: 'USD' },
+      settings: {},
     },
     ...overrides,
   };
@@ -278,7 +278,7 @@ describe('importData', () => {
         transactions: [
           { id: 'tx-1', type: 'income', amount: 100, currency: 'USD', date: '2026-01-10', accountId: 'acc-1', categoryId: 'cat-1', createdAt: 1000, updatedAt: 1000 },
         ],
-        settings: { primary_currency: 'USD' },
+        settings: {},
       });
 
       const exportResult = await exportData(adapter, { format: 'json' });

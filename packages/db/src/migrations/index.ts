@@ -256,6 +256,22 @@ const MIGRATION_006: Migration = {
 };
 
 /**
+ * Migration 007: Remove redundant primary_currency setting
+ * currencies.is_primary is the source of truth; the settings key was never read back.
+ */
+const MIGRATION_007: Migration = {
+  version: 7,
+  description: 'Remove redundant primary_currency from settings table',
+  up: [
+    `DELETE FROM settings WHERE key = 'primary_currency';`,
+  ],
+  down: [
+    `INSERT OR IGNORE INTO settings (key, value, updated_at)
+     SELECT id, id, strftime('%s','now') * 1000 FROM currencies WHERE is_primary = 1 LIMIT 1;`,
+  ],
+};
+
+/**
  * All migrations in order
  * IMPORTANT: Never modify existing migrations!
  * Always add new migrations with incremented version numbers.
@@ -267,6 +283,7 @@ export const migrations: Migration[] = [
   MIGRATION_004,
   MIGRATION_005,
   MIGRATION_006,
+  MIGRATION_007,
   // Future migrations go here
 ];
 
