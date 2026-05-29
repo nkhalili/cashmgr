@@ -177,8 +177,8 @@ export class DashboardService {
    */
   private getDateRange(filter: DashboardFilter): DateRange {
     if (filter.periodMode === 'monthly') {
-      // month is 0-indexed from filter, but our helpers expect 1-indexed
-      const month = (filter.month ?? new Date().getMonth()) + 1;
+      // filter.month is 1-indexed (1-12); getMonth() is 0-indexed so needs +1
+      const month = filter.month ?? (new Date().getMonth() + 1);
       const year = filter.year;
       return {
         startDate: getMonthStartDateString(year, month),
