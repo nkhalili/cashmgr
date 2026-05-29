@@ -218,6 +218,7 @@ Tests are co-located in `__tests__/` next to each repository, using in-memory SQ
 - Vite + React (React Router)
 - SQLite via `@sqlite.org/sqlite-wasm` + OPFS (`apps/web/src/database/`)
 - React Router for navigation
+- Settings is a navigation menu — each section (`/settings/currencies`, `/settings/appearance`, etc.) is a separate route and page component under `apps/web/src/pages/`
 - `useTransactionFilters` hook syncs filter state to URL params
 - `useDebounce` hook (300ms) for search inputs
 
@@ -226,6 +227,7 @@ Tests are co-located in `__tests__/` next to each repository, using in-memory SQ
 - Expo / React Native
 - `expo-sqlite` for local database
 - Expo Router (file-based routing)
+- Settings is a navigation menu — each section (`settings-currencies`, `settings-appearance`, etc.) is a separate screen at the root of `apps/mobile/app/`
 - `useFocusEffect` from `@react-navigation/native` for data reload on tab focus
 - Modal-based selectors (not native Picker) for better UX
 - Jest for testing (not Vitest — React Native compatibility)

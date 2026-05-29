@@ -7,15 +7,21 @@ import { AddTransaction } from './pages/AddTransaction';
 import { Categories } from './pages/Categories';
 import { Accounts } from './pages/Accounts';
 import { Settings } from './pages/Settings';
+import { SettingsCurrencies } from './pages/SettingsCurrencies';
+import { SettingsAppearance } from './pages/SettingsAppearance';
+import { SettingsBackup } from './pages/SettingsBackup';
+import { SettingsCsv } from './pages/SettingsCsv';
+import { SettingsNotifications } from './pages/SettingsNotifications';
+import { SettingsDevelopment } from './pages/SettingsDevelopment';
 import { useThemePreference, ThemePreference } from './contexts/theme-context';
 import './App.css';
 
 const NAV_LINKS = [
-  { label: 'Dashboard', to: '/' },
-  { label: 'Transactions', to: '/transactions' },
-  { label: 'Accounts', to: '/accounts' },
-  { label: 'Categories', to: '/categories' },
-  { label: 'Settings', to: '/settings' },
+  { label: 'Dashboard', to: '/', end: true },
+  { label: 'Transactions', to: '/transactions', end: false },
+  { label: 'Accounts', to: '/accounts', end: false },
+  { label: 'Categories', to: '/categories', end: false },
+  { label: 'Settings', to: '/settings', end: false },
 ];
 
 const PREFERENCE_CYCLE: ThemePreference[] = ['system', 'light', 'dark'];
@@ -81,6 +87,7 @@ export const App: React.FC = () => {
                 <li key={link.to}>
                   <NavLink
                     to={link.to}
+                    end={link.end}
                     style={({ isActive }) => ({
                       display: 'block',
                       padding: `${theme.spacing.sm}px ${theme.spacing.md}px`,
@@ -129,6 +136,12 @@ export const App: React.FC = () => {
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/currencies" element={<SettingsCurrencies />} />
+            <Route path="/settings/appearance" element={<SettingsAppearance />} />
+            <Route path="/settings/backup" element={<SettingsBackup />} />
+            <Route path="/settings/csv" element={<SettingsCsv />} />
+            <Route path="/settings/notifications" element={<SettingsNotifications />} />
+            <Route path="/settings/development" element={<SettingsDevelopment />} />
           </Routes>
         </main>
       </div>
