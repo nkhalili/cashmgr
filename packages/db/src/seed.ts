@@ -226,6 +226,20 @@ export async function seedDatabase(
     const accountIds: string[] = [];
     const categoryIds = { income: [] as string[], expense: [] as string[] };
 
+    // Ensure USD primary currency exists (seed data uses USD throughout)
+    const existingUsd = await db.query<{ count: number }>(
+      "SELECT COUNT(*) as count FROM currencies WHERE id = 'USD'"
+    );
+    if (existingUsd[0].count === 0) {
+      const now = Date.now();
+      await db.execute(
+        `INSERT INTO currencies (id, name, symbol, is_primary, exchange_rate, last_updated, is_active, created_at, updated_at)
+         VALUES ('USD', 'US Dollar', '$', 1, 1.0, ?, 1, ?, ?)`,
+        [now, now, now]
+      );
+      console.log('  ✅ Created USD primary currency');
+    }
+
     // Seed accounts
     console.log('  Creating accounts...');
     for (const account of SEED_ACCOUNTS) {
@@ -306,6 +320,7 @@ export async function clearSeedData(db: SqliteDatabase): Promise<void> {
     await db.execute('DELETE FROM transactions');
     await db.execute('DELETE FROM categories');
     await db.execute('DELETE FROM accounts');
+    await db.execute('DELETE FROM currencies');
 
     console.log('✅ All seed data cleared');
   } catch (error) {
