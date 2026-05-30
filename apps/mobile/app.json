@@ -18,6 +18,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "app.cashmgr",
       "userInterfaceStyle": "automatic",
+      "icon": {
+        "any": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png"
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
