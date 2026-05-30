@@ -35,23 +35,31 @@ jobs:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
-      # For stable (PR merge): checkout main (base branch, already has merged code)
-      # For preview (tag push): checkout dev (where the bump commit will land)
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ steps.generate_token.outputs.token }}
-          ref: ${{ github.base_ref || 'dev' }}
-
+      # Determine version, prerelease flag, checkout ref, and push target before checkout.
+      # Stable : version from branch name, checkout/push to main.
+      # Preview: version from tag, checkout/push to release/x.y.z derived from tag.
       - id: set
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             REF="${{ github.event.pull_request.head.ref }}"
-            echo "version=${REF#release/}" >> $GITHUB_OUTPUT
+            VERSION="${REF#release/}"
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
             echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "target=main" >> $GITHUB_OUTPUT
+            echo "checkout_ref=${{ github.base_ref }}" >> $GITHUB_OUTPUT
           else
-            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+            FULL_VERSION="${GITHUB_REF_NAME#v}"
+            BASE_VERSION="${FULL_VERSION%%-*}"
+            echo "version=${FULL_VERSION}" >> $GITHUB_OUTPUT
             echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "target=release/${BASE_VERSION}" >> $GITHUB_OUTPUT
+            echo "checkout_ref=release/${BASE_VERSION}" >> $GITHUB_OUTPUT
           fi
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.generate_token.outputs.token }}
+          ref: ${{ steps.set.outputs.checkout_ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -66,8 +74,7 @@ jobs:
           git config user.name "cashmgr-bot[bot]"
           git add .
           git commit -m "chore: release v${{ steps.set.outputs.version }} [skip ci]"
-          TARGET=${{ steps.set.outputs.prerelease == 'true' && 'dev' || 'main' }}
-          git push origin HEAD:$TARGET
+          git push origin HEAD:${{ steps.set.outputs.target }}
 
   # ── 2. Build and push Docker image for the web app ────────────────────────
   docker:
