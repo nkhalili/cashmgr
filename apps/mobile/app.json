@@ -2,7 +2,7 @@
   "expo": {
     "name": "Cash Mgr",
     "slug": "cashmgr",
-    "version": "0.4.1-beta.1",
+    "version": "0.5.0-rc.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -18,6 +18,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "app.cashmgr",
       "userInterfaceStyle": "automatic",
+      "icon": {
+        "dark": "./assets/icon-dark.png"
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -25,7 +28,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#7ed0ec"
+        "backgroundColor": "#ffffff"
       },
       "package": "app.cashmgr",
       "userInterfaceStyle": "automatic"
