@@ -1,6 +1,6 @@
 {
   "name": "@cashmgr/mobile",
-  "version": "0.5.0-beta.1",
+  "version": "0.5.0-rc.1",
   "private": true,
   "license": "AGPL-3.0-only",
   "main": "index.js",
