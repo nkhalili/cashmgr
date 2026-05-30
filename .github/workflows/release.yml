@@ -13,8 +13,8 @@ env:
 
 jobs:
   # ── 1. Determine version and bump manifests ───────────────────────────────
-  #   Stable : triggered by merged PR from release/* into main
-  #   Preview: triggered by pre-release tag push (v*.*.*-*)
+  #   Stable : triggered by merged PR from release/vx.y.z into main
+  #   Preview: triggered by pre-release tag push (v*.*.*-*) on release/vx.y.z
   version-bump:
     runs-on: ubuntu-latest
     permissions:
@@ -36,13 +36,13 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       # Determine version, prerelease flag, checkout ref, and push target before checkout.
-      # Stable : version from branch name, checkout/push to main.
-      # Preview: version from tag, checkout/push to release/x.y.z derived from tag.
+      # Stable : version from branch name (release/vx.y.z → x.y.z), checkout/push to main.
+      # Preview: version from tag (vx.y.z-label → x.y.z-label), checkout/push to release/vx.y.z.
       - id: set
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             REF="${{ github.event.pull_request.head.ref }}"
-            VERSION="${REF#release/}"
+            VERSION="${REF#release/v}"
             echo "version=${VERSION}" >> $GITHUB_OUTPUT
             echo "prerelease=false" >> $GITHUB_OUTPUT
             echo "target=main" >> $GITHUB_OUTPUT
@@ -52,8 +52,8 @@ jobs:
             BASE_VERSION="${FULL_VERSION%%-*}"
             echo "version=${FULL_VERSION}" >> $GITHUB_OUTPUT
             echo "prerelease=true" >> $GITHUB_OUTPUT
-            echo "target=release/${BASE_VERSION}" >> $GITHUB_OUTPUT
-            echo "checkout_ref=release/${BASE_VERSION}" >> $GITHUB_OUTPUT
+            echo "target=release/v${BASE_VERSION}" >> $GITHUB_OUTPUT
+            echo "checkout_ref=release/v${BASE_VERSION}" >> $GITHUB_OUTPUT
           fi
 
       - uses: actions/checkout@v4
