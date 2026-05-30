@@ -249,6 +249,34 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # For stable releases, find the previous stable tag so "What's Changed"
+      # covers the full release (since last stable) not just since the last rc/beta.
+      - name: Find previous stable tag
+        id: prev_stable
+        if: needs.version-bump.outputs.prerelease == 'false'
+        run: |
+          git fetch --tags
+          PREV=$(git tag --sort=-version:refname | grep -v '-' | grep -v "^v${{ needs.version-bump.outputs.version }}$" | head -1)
+          echo "tag=${PREV}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog from last stable
+        id: changelog
+        if: needs.version-bump.outputs.prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY=$(gh api --method POST /repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name="v${{ needs.version-bump.outputs.version }}" \
+            -f previous_tag_name="${{ steps.prev_stable.outputs.tag }}" \
+            --jq '.body')
+          {
+            echo "body<<DELIM"
+            echo "$BODY"
+            echo "DELIM"
+          } >> $GITHUB_OUTPUT
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -256,6 +284,7 @@ jobs:
           tag_name: v${{ needs.version-bump.outputs.version }}
           name: v${{ needs.version-bump.outputs.version }}
           prerelease: ${{ needs.version-bump.outputs.prerelease == 'true' }}
+          generate_release_notes: ${{ needs.version-bump.outputs.prerelease == 'true' }}
           body: |
             ## Downloads
 
@@ -266,5 +295,5 @@ jobs:
             | 🍎 macOS | `Cash Mgr-*.dmg` | Drag to Applications |
 
             ---
-          append_body: true
-          generate_release_notes: true
+            ${{ steps.changelog.outputs.body }}
+          append_body: ${{ needs.version-bump.outputs.prerelease == 'true' }}
