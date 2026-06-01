@@ -306,11 +306,11 @@ export function Accounts() {
           </div>
         ) : (
           <EmptyState
-            title="No accounts connected"
+            title="No accounts added"
             description="Accounts help you track balances, categorise inflows, and surface insights. Add one to begin, or use the template to get started quickly."
             action={
               <Button type="button" variant="primary" onClick={() => setShowAddModal(true)}>
-                Connect an account
+                Add an account
               </Button>
             }
             secondaryAction={<Button type="button" variant="ghost" onClick={handleUseTemplate}>Use template</Button>}

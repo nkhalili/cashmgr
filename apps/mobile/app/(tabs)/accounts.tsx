@@ -162,12 +162,12 @@ export default function AccountsScreen() {
 
   const renderEmpty = () => (
     <View style={styles.emptyCard}>
-      <Text style={styles.emptyTitle}>No accounts connected</Text>
+      <Text style={styles.emptyTitle}>No accounts added</Text>
       <Text style={styles.emptyText}>
         Accounts help you track balances, categorise inflows, and surface insights. Add one to begin, or use the template to get started quickly.
       </Text>
       <TouchableOpacity style={styles.primaryButton} onPress={() => router.push('/add-account')}>
-        <Text style={styles.primaryButtonText}>Connect an account</Text>
+        <Text style={styles.primaryButtonText}>Add an account</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.secondaryButton} onPress={handleUseTemplate}>
         <Text style={styles.secondaryButtonText}>Use template</Text>
