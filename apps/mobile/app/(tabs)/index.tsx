@@ -10,6 +10,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { useFocusEffect } from 'expo-router';
 import { Theme, useTheme, getCategoryColor } from '@cashmgr/ui';
 import type {
   CategoryAggregation,
@@ -99,6 +100,18 @@ export default function HomeScreen() {
       setIsRefreshing(false);
     }
   }, [dashboardService, budgetsService, buildFilter]);
+
+  const isFirstMount = React.useRef(true);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (isFirstMount.current) {
+        isFirstMount.current = false;
+        return;
+      }
+      void handleRefresh();
+    }, [handleRefresh])
+  );
 
   React.useEffect(() => {
     let isMounted = true;
