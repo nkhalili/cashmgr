@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Platform,
+  Modal,
+  Pressable,
   TextStyle,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
@@ -20,7 +21,6 @@ import {
 } from '@cashmgr/core';
 import { useAccountsService } from '../src/contexts/services-context';
 import { useFormValidation } from '../src/hooks/useFormValidation';
-import { Picker } from '@react-native-picker/picker';
 
 const ACCOUNT_TYPE_OPTIONS: { label: string; value: AccountType }[] = [
   { label: 'Cash on hand', value: 'cash' },
@@ -37,6 +37,7 @@ export default function EditAccountScreen() {
 
   const [name, setName] = React.useState('');
   const [accountType, setAccountType] = React.useState<AccountType>('cash');
+  const [activeModal, setActiveModal] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -137,6 +138,16 @@ export default function EditAccountScreen() {
     router.back();
   }, [router]);
 
+  const getAccountTypeLabel = React.useCallback(() => {
+    const option = ACCOUNT_TYPE_OPTIONS.find((o) => o.value === accountType);
+    return option ? option.label : null;
+  }, [accountType]);
+
+  const handleSelectAccountType = React.useCallback((value: AccountType) => {
+    setAccountType(value);
+    setActiveModal(false);
+  }, []);
+
   if (isLoading) {
     return (
       <>
@@ -204,20 +215,18 @@ export default function EditAccountScreen() {
               {errors.name && <Text style={styles.errorMessage}>{errors.name}</Text>}
             </View>
 
-            {/* Account Type */}
+            {/* Account Type - Modal Selector */}
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>Account type</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={accountType}
-                  onValueChange={(value) => setAccountType(value as AccountType)}
-                  style={styles.picker}
-                >
-                  {ACCOUNT_TYPE_OPTIONS.map((option) => (
-                    <Picker.Item key={option.value} label={option.label} value={option.value} />
-                  ))}
-                </Picker>
-              </View>
+              <TouchableOpacity
+                style={styles.selectField}
+                onPress={() => setActiveModal(true)}
+              >
+                <Text style={styles.selectFieldText}>
+                  {getAccountTypeLabel() || 'Select account type...'}
+                </Text>
+                <Text style={styles.selectFieldArrow}>›</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Read-only Current Balance Info */}
@@ -261,6 +270,35 @@ export default function EditAccountScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Account Type Selection Modal */}
+      <Modal
+        visible={activeModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setActiveModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Account Type</Text>
+            <Pressable onPress={() => setActiveModal(false)}>
+              <Text style={styles.modalClose}>Done</Text>
+            </Pressable>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            {ACCOUNT_TYPE_OPTIONS.map((option) => (
+              <Pressable
+                key={option.value}
+                style={styles.modalOption}
+                onPress={() => handleSelectAccountType(option.value)}
+              >
+                <Text style={styles.modalOptionText}>{option.label}</Text>
+                {accountType === option.value && <Text style={styles.modalOptionCheck}>✓</Text>}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -342,16 +380,68 @@ const createStyles = (theme: Theme) =>
     inputError: {
       borderColor: '#c00',
     },
-    pickerContainer: {
+    selectField: {
+      height: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       borderWidth: 1,
       borderColor: theme.colors.border,
       borderRadius: theme.radii.md,
+      paddingHorizontal: theme.spacing.md,
       backgroundColor: theme.colors.surface,
-      overflow: 'hidden',
     },
-    picker: {
-      height: Platform.OS === 'ios' ? 150 : 48,
+    selectFieldText: {
+      fontSize: theme.typography.body.fontSize,
       color: theme.colors.textPrimary,
+      flex: 1,
+    },
+    selectFieldArrow: {
+      fontSize: 20,
+      color: theme.colors.textSecondary,
+      marginLeft: theme.spacing.sm,
+    },
+    modalContainer: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: theme.spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    modalTitle: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: fontWeight(theme.typography.h3.fontWeight),
+      color: theme.colors.textPrimary,
+    },
+    modalClose: {
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.primary,
+      fontWeight: fontWeight(600),
+    },
+    modalContent: {
+      flex: 1,
+    },
+    modalOption: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: theme.spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    modalOptionText: {
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.textPrimary,
+    },
+    modalOptionCheck: {
+      fontSize: 18,
+      color: theme.colors.primary,
+      fontWeight: fontWeight(600),
     },
     errorMessage: {
       color: '#c00',
