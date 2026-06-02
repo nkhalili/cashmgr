@@ -12,10 +12,12 @@ import { Stack } from 'expo-router';
 import { Theme, useTheme } from '@cashmgr/ui';
 import { AppError, ErrorHandler } from '@cashmgr/core';
 import { seedMobileDatabase, clearMobileSeedData, hasMobileData } from '../src/database/mobile-seed';
+import { useUpdateDev } from '../src/contexts/update-context';
 
 export default function SettingsDevelopmentScreen() {
   const theme = useTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
+  const updateDev = useUpdateDev();
 
   const [isSeeding, setIsSeeding] = React.useState(false);
   const [hasData, setHasData] = React.useState(false);
@@ -102,11 +104,29 @@ export default function SettingsDevelopmentScreen() {
           </View>
         )}
 
-        <Text style={styles.description}>
-          {hasData
-            ? 'Load sample data to test features with realistic accounts, categories, and transactions.'
-            : 'Your database is empty. Load sample data to get started quickly.'}
-        </Text>
+        {updateDev && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Auto Update</Text>
+            <Text style={styles.description}>
+              Simulate an update notification to preview the banner.
+            </Text>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={updateDev.simulateUpdate}
+            >
+              <Text style={styles.primaryButtonText}>Simulate Update Banner</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Sample Data</Text>
+          <Text style={styles.description}>
+            {hasData
+              ? 'Load sample data to test features with realistic accounts, categories, and transactions.'
+              : 'Your database is empty. Load sample data to get started quickly.'}
+          </Text>
+        </View>
 
         <View style={{ gap: theme.spacing.sm }}>
           <TouchableOpacity
@@ -141,6 +161,8 @@ const createStyles = (theme: Theme) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
     content: { padding: theme.spacing.lg, gap: theme.spacing.lg },
+    section: { gap: theme.spacing.sm },
+    sectionTitle: { fontSize: theme.typography.h4.fontSize, fontWeight: fontWeight(theme.typography.h4.fontWeight), color: theme.colors.textPrimary },
     description: { color: theme.colors.textSecondary, lineHeight: 20 },
     errorBanner: {
       backgroundColor: '#fee',
