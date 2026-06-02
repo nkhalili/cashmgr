@@ -15,6 +15,7 @@ import { SettingsCsv } from './pages/SettingsCsv';
 import { SettingsNotifications } from './pages/SettingsNotifications';
 import { SettingsDevelopment } from './pages/SettingsDevelopment';
 import { useThemePreference, ThemePreference } from './contexts/theme-context';
+import { UpdateBanner } from './components/UpdateBanner';
 import './App.css';
 
 const NAV_LINKS = [
@@ -52,6 +53,7 @@ export const App: React.FC = () => {
           fontFamily: theme.fontFamily,
         }}
       >
+        <UpdateBanner />
         <aside
           className="nav"
           style={{

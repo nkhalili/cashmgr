@@ -1,6 +1,23 @@
 import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from 'electron';
+import { autoUpdater, UpdateDownloadedEvent } from 'electron-updater';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
+
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = false;
+
+autoUpdater.on('update-downloaded', (info: UpdateDownloadedEvent) => {
+  mainWindow?.webContents.send('update-downloaded', {
+    version: info.version,
+    releaseNotes: info.releaseNotes,
+  });
+});
+
+function scheduleUpdateCheck() {
+  if (!app.isPackaged) return;
+  setTimeout(() => autoUpdater.checkForUpdates(), 10_000);
+  setInterval(() => autoUpdater.checkForUpdates(), 4 * 60 * 60 * 1000);
+}
 
 function buildMenu() {
   const isMac = process.platform === 'darwin';
@@ -128,6 +145,7 @@ app.whenReady().then(() => {
 
   Menu.setApplicationMenu(buildMenu());
   createWindow();
+  scheduleUpdateCheck();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -137,6 +155,17 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+ipcMain.handle('install-update', () => {
+  if (!app.isPackaged) return;
+  autoUpdater.quitAndInstall();
+});
+
+if (!app.isPackaged) {
+  ipcMain.handle('dev:simulate-update', () => {
+    mainWindow?.webContents.send('update-downloaded', { version: '99.0.0', releaseNotes: null });
+  });
+}
 
 ipcMain.handle('db:query', async (_event, sql: string, params: unknown[]) => {
   console.log('Database query:', sql, params);

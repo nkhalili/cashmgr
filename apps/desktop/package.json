@@ -18,7 +18,8 @@
   "dependencies": {
     "@cashmgr/core": "workspace:*",
     "@cashmgr/db": "workspace:*",
-    "better-sqlite3": "^11.8.1"
+    "better-sqlite3": "^11.8.1",
+    "electron-updater": "^6.3.0"
   },
   "devDependencies": {
     "@electron/notarize": "^2.2.1",
@@ -57,6 +58,11 @@
     },
     "linux": {
       "target": "AppImage"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "nkhalili",
+      "repo": "cashmgr"
     }
   }
 }

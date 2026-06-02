@@ -88,6 +88,23 @@ export function SettingsDevelopment() {
         </div>
       )}
 
+      {window.updater?.simulateUpdate && (
+        <Card
+          title="Auto Update"
+          subtitle="Simulate an update notification (Electron dev only)"
+          tone="default"
+          footer={
+            <Button type="button" variant="ghost" onClick={() => window.updater?.simulateUpdate?.()}>
+              Simulate Update Banner
+            </Button>
+          }
+        >
+          <p style={{ margin: 0, color: theme.colors.textSecondary }}>
+            Fires a fake <code>update-downloaded</code> IPC event so the update banner appears without a real release.
+          </p>
+        </Card>
+      )}
+
       <Card
         title="Development"
         subtitle="Sample data for testing and development"
