@@ -42,6 +42,10 @@ export class AccountsService {
       if (error && typeof error === 'object' && 'issues' in error) {
         throw ValidationError.fromZodError(error);
       }
+      // Rethrow ValidationError directly — user-triggered, not an unexpected error
+      if (error instanceof ValidationError) {
+        throw error;
+      }
       // F-024: Use ErrorHandler for all other errors
       throw ErrorHandler.handle(error, 'AccountsService.createAccount');
     }

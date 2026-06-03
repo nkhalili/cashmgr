@@ -42,6 +42,7 @@ export default function AddAccountScreen() {
   const [name, setName] = React.useState('');
   const [accountType, setAccountType] = React.useState<AccountType>('cash');
   const [initialBalance, setInitialBalance] = React.useState('');
+  const [owesBalance, setOwesBalance] = React.useState(false);
   const [currencies, setCurrencies] = React.useState<Currency[]>([]);
   const [selectedCurrency, setSelectedCurrency] = React.useState(DEFAULT_CURRENCY);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -49,15 +50,16 @@ export default function AddAccountScreen() {
   const [activeModal, setActiveModal] = React.useState<ModalType>(null);
 
   // Helper to get current form values for validation
-  const getFormValues = React.useCallback(
-    () => ({
+  const getFormValues = React.useCallback(() => {
+    const raw = initialBalance.trim() ? Math.abs(Number(initialBalance)) : 0;
+    const parsed = Number.isFinite(raw) ? raw : 0;
+    return {
       name: name.trim(),
       type: accountType,
-      initialBalance: initialBalance.trim() ? Number(initialBalance) : 0,
+      initialBalance: accountType === 'credit' && owesBalance ? -parsed : parsed,
       currency: selectedCurrency,
-    }),
-    [name, accountType, initialBalance, selectedCurrency]
-  );
+    };
+  }, [name, accountType, initialBalance, owesBalance, selectedCurrency]);
 
   // F-026: Client-side form validation
   const { errors, validateField, validateAll, isValid } = useFormValidation(
@@ -129,6 +131,7 @@ export default function AddAccountScreen() {
   // Handle selection from modals
   const handleSelectAccountType = React.useCallback((value: AccountType) => {
     setAccountType(value);
+    if (value !== 'credit') setOwesBalance(false);
     setActiveModal(null);
   }, []);
 
@@ -234,8 +237,24 @@ export default function AddAccountScreen() {
                 // F-026: Validate on blur (show error first time)
                 validateField('initialBalance', getFormValues());
               }}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
             />
+            {accountType === 'credit' && (
+              <>
+                <Pressable
+                  style={styles.checkboxRow}
+                  onPress={() => setOwesBalance((prev) => !prev)}
+                >
+                  <View style={[styles.checkbox, owesBalance && styles.checkboxChecked]}>
+                    {owesBalance && <Text style={styles.checkboxMark}>✓</Text>}
+                  </View>
+                  <Text style={styles.checkboxLabel}>I currently owe this balance</Text>
+                </Pressable>
+                <Text style={styles.hintText}>
+                  Enter your current balance. Check the box if it is an amount you owe — it will be recorded as a negative balance.
+                </Text>
+              </>
+            )}
             {errors.initialBalance && (
               <Text style={styles.errorMessage}>{errors.initialBalance}</Text>
             )}
@@ -415,6 +434,39 @@ const createStyles = (theme: Theme) =>
       fontSize: 20,
       color: theme.colors.textSecondary,
       marginLeft: theme.spacing.sm,
+    },
+    checkboxRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: theme.spacing.sm,
+      gap: theme.spacing.sm,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderRadius: 4,
+      borderWidth: 2,
+      borderColor: theme.colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    checkboxChecked: {
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
+    },
+    checkboxMark: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: fontWeight(700),
+    },
+    checkboxLabel: {
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.textPrimary,
+    },
+    hintText: {
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xs,
     },
     errorMessage: {
       color: '#c00',

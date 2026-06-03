@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { ValidationError } from './errors';
 
 /**
  * Account Type Schema
@@ -86,7 +87,7 @@ export function validateAccountBusinessRules(input: {
     input.initialBalance < 0 &&
     input.type !== 'credit'
   ) {
-    throw new Error('Only credit accounts can have a negative initial balance');
+    throw new ValidationError('initialBalance', 'Only credit accounts can have a negative initial balance');
   }
 }
 
