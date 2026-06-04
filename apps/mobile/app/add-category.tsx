@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useKeyboardHeight } from '../src/hooks/useKeyboardHeight';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@cashmgr/ui';
 import { Category, AppError, CategoryType } from '@cashmgr/core';
@@ -81,11 +82,14 @@ export default function AddCategoryScreen() {
     }
   };
 
+  const keyboardHeight = useKeyboardHeight();
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
+    scroll: { flex: 1 },
     content: {
       padding: theme.spacing.md,
     },
@@ -154,9 +158,7 @@ export default function AddCategoryScreen() {
     },
     actions: {
       padding: theme.spacing.md,
-      backgroundColor: theme.colors.surface,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
+      marginTop: theme.spacing.md,
     },
     submitButton: {
       backgroundColor: theme.colors.primary,
@@ -182,8 +184,8 @@ export default function AddCategoryScreen() {
           headerBackTitle: 'Categories',
         }}
       />
-      <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.content}>
+      <View style={[styles.container, keyboardHeight > 0 && { paddingBottom: keyboardHeight }]}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.label}>Category Name</Text>
           <TextInput
             style={styles.input}
@@ -249,21 +251,22 @@ export default function AddCategoryScreen() {
               </TouchableOpacity>
             </>
           )}
-        </ScrollView>
 
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.submitButtonText}>Create category</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+          {/* Actions */}
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={styles.submitButtonText}>Create category</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
     </>
   );

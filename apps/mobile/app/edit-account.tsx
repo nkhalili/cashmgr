@@ -11,6 +11,7 @@ import {
   Pressable,
   TextStyle,
 } from 'react-native';
+import { useKeyboardHeight } from '../src/hooks/useKeyboardHeight';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Theme, useTheme } from '@cashmgr/ui';
 import {
@@ -34,6 +35,7 @@ export default function EditAccountScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const accountsService = useAccountsService();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
+  const keyboardHeight = useKeyboardHeight();
 
   const [name, setName] = React.useState('');
   const [accountType, setAccountType] = React.useState<AccountType>('cash');
@@ -173,8 +175,8 @@ export default function EditAccountScreen() {
           headerBackTitle: 'Accounts',
         }}
       />
-      <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.content}>
+      <View style={[styles.container, keyboardHeight > 0 && { paddingBottom: keyboardHeight }]}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <Text style={styles.title}>Edit Account</Text>
             <Text style={styles.subtitle}>Update account details</Text>
@@ -242,33 +244,33 @@ export default function EditAccountScreen() {
               </Text>
             </View>
           </View>
-        </ScrollView>
 
-        {/* Fixed Bottom Actions */}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.button, styles.cancelButton]}
-            onPress={handleCancel}
-            disabled={isSubmitting}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              styles.submitButton,
-              (!isValid || isSubmitting) && styles.buttonDisabled,
-            ]}
-            onPress={handleSubmit}
-            disabled={!isValid || isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.submitButtonText}>Save changes</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+          {/* Actions */}
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.button, styles.cancelButton]}
+              onPress={handleCancel}
+              disabled={isSubmitting}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.button,
+                styles.submitButton,
+                (!isValid || isSubmitting) && styles.buttonDisabled,
+              ]}
+              onPress={handleSubmit}
+              disabled={!isValid || isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.submitButtonText}>Save changes</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
 
       {/* Account Type Selection Modal */}
@@ -323,9 +325,11 @@ const createStyles = (theme: Theme) =>
       color: theme.colors.textSecondary,
       fontSize: theme.typography.body.fontSize,
     },
+    scroll: {
+      flex: 1,
+    },
     content: {
       padding: theme.spacing.lg,
-      paddingBottom: 100, // Space for fixed bottom actions
     },
     header: {
       marginBottom: theme.spacing.lg,
@@ -479,16 +483,10 @@ const createStyles = (theme: Theme) =>
       lineHeight: 18,
     },
     actions: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
       flexDirection: 'row',
       gap: theme.spacing.md,
       padding: theme.spacing.lg,
-      backgroundColor: theme.colors.background,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
+      marginTop: theme.spacing.lg,
     },
     button: {
       flex: 1,

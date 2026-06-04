@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useKeyboardHeight } from '../src/hooks/useKeyboardHeight';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@cashmgr/ui';
 import { Category, AppError } from '@cashmgr/core';
@@ -147,11 +148,14 @@ export default function EditCategoryScreen() {
     );
   };
 
+  const keyboardHeight = useKeyboardHeight();
+
   const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
+    scroll: { flex: 1 },
     loadingContainer: {
       flex: 1,
       justifyContent: 'center',
@@ -225,9 +229,7 @@ export default function EditCategoryScreen() {
     },
     actions: {
       padding: theme.spacing.md,
-      backgroundColor: theme.colors.surface,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
+      marginTop: theme.spacing.md,
       gap: theme.spacing.sm,
     },
     submitButton: {
@@ -284,8 +286,8 @@ export default function EditCategoryScreen() {
           headerBackTitle: 'Categories',
         }}
       />
-      <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.content}>
+      <View style={[styles.container, keyboardHeight > 0 && { paddingBottom: keyboardHeight }]}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.label}>Category Name</Text>
           <TextInput
             style={styles.input}
@@ -351,28 +353,29 @@ export default function EditCategoryScreen() {
               </TouchableOpacity>
             </>
           )}
+
+          {/* Actions */}
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={styles.submitButtonText}>Save changes</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={handleDelete}
+            >
+              <Text style={styles.deleteButtonText}>Delete category</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
-
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.submitButtonText}>Save changes</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={handleDelete}
-          >
-            <Text style={styles.deleteButtonText}>Delete category</Text>
-          </TouchableOpacity>
-        </View>
       </View>
     </>
   );

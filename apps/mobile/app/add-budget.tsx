@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useKeyboardHeight } from '../src/hooks/useKeyboardHeight';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@cashmgr/ui';
 import { Category, AppError } from '@cashmgr/core';
@@ -102,8 +103,11 @@ export default function AddBudgetScreen() {
     year: 'numeric',
   });
 
+  const keyboardHeight = useKeyboardHeight();
+
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { flex: 1 },
     content: { padding: theme.spacing.md },
     label: {
       fontSize: 14,
@@ -144,9 +148,7 @@ export default function AddBudgetScreen() {
     },
     actions: {
       padding: theme.spacing.md,
-      backgroundColor: theme.colors.surface,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
+      marginTop: theme.spacing.md,
     },
     submitButton: {
       backgroundColor: theme.colors.primary,
@@ -172,8 +174,8 @@ export default function AddBudgetScreen() {
   return (
     <>
       <Stack.Screen options={{ title: 'Add Budget', headerBackTitle: 'Budget' }} />
-      <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.content}>
+      <View style={[styles.container, keyboardHeight > 0 && { paddingBottom: keyboardHeight }]}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.periodBadge}>
             <Text style={styles.periodText}>{monthLabel}</Text>
           </View>
@@ -201,21 +203,22 @@ export default function AddBudgetScreen() {
               This amount will be used as the default for this category every month going forward. You can always adjust it for any individual month.
             </Text>
           </View>
-        </ScrollView>
 
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.submitButtonText}>Create budget</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+          {/* Actions */}
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={styles.submitButtonText}>Create budget</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
     </>
   );

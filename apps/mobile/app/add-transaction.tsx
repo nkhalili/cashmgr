@@ -11,6 +11,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
+import { useKeyboardHeight } from '../src/hooks/useKeyboardHeight';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Theme, useTheme } from '@cashmgr/ui';
@@ -48,6 +49,8 @@ export default function AddTransactionScreen() {
   const categoriesService = useCategoriesService();
   const transactionsService = useTransactionsService();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
+  const keyboardHeight = useKeyboardHeight();
+  const scrollViewRef = React.useRef<ScrollView>(null);
 
   // Form state
   const [type, setType] = React.useState<TransactionType>('expense');
@@ -294,8 +297,8 @@ export default function AddTransactionScreen() {
           headerBackTitle: params.source === 'transactions' ? 'Back' : undefined,
         }}
       />
-      <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.content}>
+      <View style={[styles.container, keyboardHeight > 0 && { paddingBottom: keyboardHeight }]}>
+        <ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         
         {error && (
           <View style={styles.errorBanner}>
@@ -441,45 +444,46 @@ export default function AddTransactionScreen() {
               onChangeText={setNotes}
               multiline
               numberOfLines={3}
+              onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 150)}
             />
           </View>
         </View>
-      </ScrollView>
 
-      {/* Fixed Bottom Actions */}
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.button, styles.cancelButton]}
-          onPress={resetForm}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.cancelButtonText}>Reset</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.button,
-            styles.submitButton,
-            (!isValid || isSubmitting || accounts.length === 0 || flattenedCategories.length === 0) &&
-              styles.buttonDisabled,
-          ]}
-          onPress={handleSubmit}
-          disabled={!isValid || isSubmitting || accounts.length === 0 || flattenedCategories.length === 0}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.submitButtonText}>Save transaction</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+        {!isLoading && accounts.length === 0 && (
+          <View style={styles.noAccountsBanner}>
+            <Text style={styles.noAccountsText}>
+              No accounts found. Create an account first to add transactions.
+            </Text>
+          </View>
+        )}
 
-      {!isLoading && accounts.length === 0 && (
-        <View style={styles.noAccountsBanner}>
-          <Text style={styles.noAccountsText}>
-            No accounts found. Create an account first to add transactions.
-          </Text>
+        {/* Actions */}
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.button, styles.cancelButton]}
+            onPress={resetForm}
+            disabled={isSubmitting}
+          >
+            <Text style={styles.cancelButtonText}>Reset</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.button,
+              styles.submitButton,
+              (!isValid || isSubmitting || accounts.length === 0 || flattenedCategories.length === 0) &&
+                styles.buttonDisabled,
+            ]}
+            onPress={handleSubmit}
+            disabled={!isValid || isSubmitting || accounts.length === 0 || flattenedCategories.length === 0}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.submitButtonText}>Save transaction</Text>
+            )}
+          </TouchableOpacity>
         </View>
-      )}
+      </ScrollView>
       </View>
 
       {/* Account Selection Modal */}
@@ -603,9 +607,11 @@ const createStyles = (theme: Theme) =>
       marginTop: theme.spacing.md,
       color: theme.colors.textSecondary,
     },
+    scroll: {
+      flex: 1,
+    },
     content: {
       padding: theme.spacing.lg,
-      paddingBottom: 100,
     },
     header: {
       marginBottom: theme.spacing.lg,
@@ -740,16 +746,9 @@ const createStyles = (theme: Theme) =>
       marginTop: theme.spacing.xs,
     },
     actions: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
       flexDirection: 'row',
       gap: theme.spacing.md,
-      padding: theme.spacing.lg,
-      backgroundColor: theme.colors.background,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
+      marginTop: theme.spacing.lg,
     },
     button: {
       flex: 1,
@@ -780,10 +779,7 @@ const createStyles = (theme: Theme) =>
       opacity: 0.5,
     },
     noAccountsBanner: {
-      position: 'absolute',
-      bottom: 80,
-      left: theme.spacing.lg,
-      right: theme.spacing.lg,
+      margin: theme.spacing.lg,
       backgroundColor: '#fff3cd',
       padding: theme.spacing.md,
       borderRadius: theme.radii.md,

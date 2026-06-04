@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useKeyboardHeight } from '../src/hooks/useKeyboardHeight';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@cashmgr/ui';
 import { AppError, formatCurrency } from '@cashmgr/core';
@@ -87,8 +88,11 @@ export default function EditBudgetScreen() {
       })
     : '';
 
+  const keyboardHeight = useKeyboardHeight();
+
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { flex: 1 },
     content: { padding: theme.spacing.md },
     label: {
       fontSize: 14,
@@ -156,9 +160,7 @@ export default function EditBudgetScreen() {
     },
     actions: {
       padding: theme.spacing.md,
-      backgroundColor: theme.colors.surface,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
+      marginTop: theme.spacing.md,
     },
     submitButton: {
       backgroundColor: theme.colors.primary,
@@ -195,8 +197,8 @@ export default function EditBudgetScreen() {
   return (
     <>
       <Stack.Screen options={{ title: 'Edit Budget', headerBackTitle: 'Budget' }} />
-      <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.content}>
+      <View style={[styles.container, keyboardHeight > 0 && { paddingBottom: keyboardHeight }]}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {budget && (
             <View style={styles.categoryHeader}>
               <View style={[styles.iconCircle, { backgroundColor: budget.categoryColor ?? theme.colors.surfaceMuted }]}>
@@ -242,21 +244,22 @@ export default function EditBudgetScreen() {
               </View>
             </View>
           )}
-        </ScrollView>
 
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.submitButtonText}>Save changes</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+          {/* Actions */}
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={styles.submitButtonText}>Save changes</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
     </>
   );

@@ -11,6 +11,7 @@ import {
   Pressable,
   TextStyle,
 } from 'react-native';
+import { useKeyboardHeight } from '../src/hooks/useKeyboardHeight';
 import { useRouter, Stack } from 'expo-router';
 import { Theme, useTheme } from '@cashmgr/ui';
 import {
@@ -38,6 +39,8 @@ export default function AddAccountScreen() {
   const accountsService = useAccountsService();
   const currenciesService = useCurrenciesService();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const keyboardHeight = useKeyboardHeight();
 
   const [name, setName] = React.useState('');
   const [accountType, setAccountType] = React.useState<AccountType>('cash');
@@ -148,8 +151,8 @@ export default function AddAccountScreen() {
           headerBackTitle: 'Accounts',
         }}
       />
-      <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.content}>
+      <View style={[styles.container, keyboardHeight > 0 && { paddingBottom: keyboardHeight }]}>
+        <ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
 
         {error && (
           <View style={styles.errorBanner}>
@@ -237,6 +240,7 @@ export default function AddAccountScreen() {
                 // F-026: Validate on blur (show error first time)
                 validateField('initialBalance', getFormValues());
               }}
+              onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 150)}
               keyboardType="decimal-pad"
             />
             {accountType === 'credit' && (
@@ -260,29 +264,29 @@ export default function AddAccountScreen() {
             )}
           </View>
         </View>
-      </ScrollView>
 
-      {/* Fixed Bottom Actions */}
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.button, styles.cancelButton]}
-          onPress={handleCancel}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.button, styles.submitButton, (!isValid || isSubmitting) && styles.buttonDisabled]}
-          onPress={handleSubmit}
-          disabled={!isValid || isSubmitting}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.submitButtonText}>Save account</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+        {/* Actions */}
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.button, styles.cancelButton]}
+            onPress={handleCancel}
+            disabled={isSubmitting}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.button, styles.submitButton, (!isValid || isSubmitting) && styles.buttonDisabled]}
+            onPress={handleSubmit}
+            disabled={!isValid || isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.submitButtonText}>Save account</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
       </View>
 
       {/* Account Type Selection Modal */}
@@ -357,9 +361,11 @@ const createStyles = (theme: Theme) =>
       flex: 1,
       backgroundColor: theme.colors.background,
     },
+    scroll: {
+      flex: 1,
+    },
     content: {
       padding: theme.spacing.lg,
-      paddingBottom: 100, // Space for fixed bottom actions
     },
     header: {
       marginBottom: theme.spacing.lg,
@@ -474,16 +480,10 @@ const createStyles = (theme: Theme) =>
       marginTop: theme.spacing.xs,
     },
     actions: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
       flexDirection: 'row',
       gap: theme.spacing.md,
       padding: theme.spacing.lg,
-      backgroundColor: theme.colors.background,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
+      marginTop: theme.spacing.lg,
     },
     button: {
       flex: 1,
