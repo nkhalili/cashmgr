@@ -81,7 +81,7 @@ export const App: React.FC = () => {
               Cash mgr.
             </h1>
             <p style={{ margin: 0, color: 'rgba(255,255,255,0.8)' }}>
-              Calm oversight for your accounts.
+              Manager your money. Own your data.
             </p>
           </div>
           <nav style={{ flex: 1 }}>
