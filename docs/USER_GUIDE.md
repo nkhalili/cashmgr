@@ -14,7 +14,8 @@ CashMgr is a personal finance app that helps you track income, expenses, and tra
 6. [Dashboard](#dashboard)
 7. [Currencies](#currencies)
 8. [Settings & Data Management](#settings--data-management)
-9. [Tips & Tricks](#tips--tricks)
+9. [About](#about)
+10. [Tips & Tricks](#tips--tricks)
 
 ---
 
@@ -343,6 +344,25 @@ The backup includes accounts, categories, currencies, transactions, budgets (act
 **Replace mode** recalculates all account balances from transactions after import, so your balances will be accurate even if the backup's stored balances were stale.
 
 **Merge mode** compares `updatedAt` timestamps: the backup version wins only if it is newer than the local version.
+
+---
+
+## About
+
+Access **Settings → About** on any platform to find:
+
+- **Version** — the currently installed version of Cash Mgr.
+- **Source Code** — opens the GitHub repository.
+- **Report an Issue** — opens GitHub Issues to submit a bug report (requires a GitHub account).
+- **Sponsor on GitHub** — support the project via GitHub Sponsors.
+- **Buy Me a Coffee** — one-time donation via buymeacoffee.com.
+
+### Desktop Help Menu
+
+On desktop, the same links are also available from the **Help** menu in the menu bar, along with:
+
+- **About Cash Mgr.** — shows a dialog with the app icon, description, and version.
+- **Check for Updates…** — manually triggers an update check. You will be notified if a new version is available or if you are already on the latest version.
 
 ---
 

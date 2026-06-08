@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, shell } from 'electron';
 import { autoUpdater, UpdateDownloadedEvent } from 'electron-updater';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
@@ -12,6 +12,38 @@ autoUpdater.on('update-downloaded', (info: UpdateDownloadedEvent) => {
     releaseNotes: info.releaseNotes,
   });
 });
+
+let isCheckingForUpdates = false;
+
+function checkForUpdatesManually() {
+  if (!app.isPackaged) {
+    dialog.showMessageBox({ type: 'info', message: 'Update checks are only available in production builds.', buttons: ['OK'] });
+    return;
+  }
+  if (isCheckingForUpdates) return;
+  isCheckingForUpdates = true;
+
+  const onAvailable = () => {
+    cleanup();
+    dialog.showMessageBox({ type: 'info', title: 'Update Available', message: 'A new update is downloading in the background.\nYou will be notified when it is ready to install.', buttons: ['OK'] });
+  };
+  const onNotAvailable = () => {
+    cleanup();
+    dialog.showMessageBox({ type: 'info', title: 'No Updates Available', message: `Cash Mgr. ${app.getVersion()} is the latest version.`, buttons: ['OK'] });
+  };
+  const cleanup = () => {
+    isCheckingForUpdates = false;
+    autoUpdater.off('update-available', onAvailable);
+    autoUpdater.off('update-not-available', onNotAvailable);
+  };
+
+  autoUpdater.once('update-available', onAvailable);
+  autoUpdater.once('update-not-available', onNotAvailable);
+  autoUpdater.checkForUpdates().catch((err: Error) => {
+    cleanup();
+    dialog.showMessageBox({ type: 'error', title: 'Update Check Failed', message: err.message, buttons: ['OK'] });
+  });
+}
 
 function scheduleUpdateCheck() {
   if (!app.isPackaged) return;
@@ -74,8 +106,46 @@ function buildMenu() {
       label: 'Help',
       submenu: [
         {
+          label: 'About Cash Mgr.',
+          click: () => {
+            const iconPath = path.join(__dirname, '../build/icons/256x256.png');
+            const icon = nativeImage.createFromPath(iconPath);
+            dialog.showMessageBox({
+              type: 'none',
+              icon,
+              title: 'Cash Mgr.',
+              message: 'Cash Mgr.',
+              detail: [
+                'A free, open source, offline-first personal finance manager.',
+                'Manage your money. Own your data.',
+                '',
+                `Version ${app.getVersion()}`,
+              ].join('\n'),
+              buttons: ['OK'],
+            });
+          },
+        },
+        {
+          label: 'Check for Updates…',
+          click: () => checkForUpdatesManually(),
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Source Code',
+          click: () => shell.openExternal('https://github.com/nkhalili/cashmgr'),
+        },
+        {
           label: 'Report an Issue',
           click: () => shell.openExternal('https://github.com/nkhalili/cashmgr/issues'),
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Sponsor on GitHub',
+          click: () => shell.openExternal('https://github.com/sponsors/nkhalili'),
+        },
+        {
+          label: 'Buy Me a Coffee',
+          click: () => shell.openExternal('https://buymeacoffee.com/nkhalili'),
         },
       ],
     },

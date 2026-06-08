@@ -63,6 +63,7 @@ export function Settings() {
       header: 'App',
       rows: [
         { label: 'Data & Notifications', route: '/settings/notifications', icon: '🔔' },
+        { label: 'About', subtitle: `v${__APP_VERSION__}`, route: '/settings/about', icon: 'ℹ️' },
       ],
     },
     ...(isDevelopment

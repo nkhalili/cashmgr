@@ -14,6 +14,7 @@ import { SettingsBackup } from './pages/SettingsBackup';
 import { SettingsCsv } from './pages/SettingsCsv';
 import { SettingsNotifications } from './pages/SettingsNotifications';
 import { SettingsDevelopment } from './pages/SettingsDevelopment';
+import { SettingsAbout } from './pages/SettingsAbout';
 import { useThemePreference, ThemePreference } from './contexts/theme-context';
 import { UpdateBanner } from './components/UpdateBanner';
 import './App.css';
@@ -146,6 +147,7 @@ export const App: React.FC = () => {
             <Route path="/settings/csv" element={<SettingsCsv />} />
             <Route path="/settings/notifications" element={<SettingsNotifications />} />
             <Route path="/settings/development" element={<SettingsDevelopment />} />
+            <Route path="/settings/about" element={<SettingsAbout />} />
           </Routes>
         </main>
       </div>

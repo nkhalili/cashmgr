@@ -109,6 +109,12 @@ export default function SettingsScreen() {
           route: '/settings-notifications',
           icon: 'notifications-outline',
         },
+        {
+          label: 'About',
+          subtitle: 'Cash Mgr. · version & links',
+          route: '/settings-about',
+          icon: 'information-circle-outline',
+        },
       ],
     },
     ...(isDevelopment
