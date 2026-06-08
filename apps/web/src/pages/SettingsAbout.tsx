@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { useTheme } from '@cashmgr/ui';
 
@@ -60,7 +59,7 @@ export function SettingsAbout() {
           style={{
             width: 72,
             height: 72,
-            borderRadius: theme.radii.xl,
+            borderRadius: theme.radii.lg,
             boxShadow: theme.shadows.medium,
           }}
         />
@@ -88,7 +87,7 @@ export function SettingsAbout() {
             marginTop: theme.spacing.xs,
             display: 'inline-block',
             padding: `2px ${theme.spacing.sm}px`,
-            borderRadius: theme.radii.full ?? theme.radii.lg,
+            borderRadius: theme.radii.pill,
             backgroundColor: theme.colors.primarySoft,
             color: theme.colors.primary,
             fontSize: theme.typography.caption.fontSize,
