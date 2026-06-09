@@ -62,7 +62,6 @@ export function Settings() {
     {
       header: 'App',
       rows: [
-        { label: 'Data & Notifications', route: '/settings/notifications', icon: '🔔' },
         { label: 'About', subtitle: `v${__APP_VERSION__}`, route: '/settings/about', icon: 'ℹ️' },
       ],
     },
@@ -71,7 +70,7 @@ export function Settings() {
           {
             header: 'Development',
             rows: [
-              { label: 'Development Tools', subtitle: 'Sample data & reset', route: '/settings/development', icon: '🔧' },
+              { label: 'Development Tools', subtitle: 'Sample data & dev tools', route: '/settings/development', icon: '🔧' },
             ],
           },
         ]
@@ -94,7 +93,7 @@ export function Settings() {
           Settings
         </h2>
         <p style={{ marginTop: theme.spacing.xs, color: theme.colors.textSecondary }}>
-          Finely tune currencies, themes, and syncing preferences.
+          Finely tune currencies, themes, and preferences.
         </p>
       </div>
 

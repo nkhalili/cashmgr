@@ -12,7 +12,6 @@ import { SettingsCurrencies } from './pages/SettingsCurrencies';
 import { SettingsAppearance } from './pages/SettingsAppearance';
 import { SettingsBackup } from './pages/SettingsBackup';
 import { SettingsCsv } from './pages/SettingsCsv';
-import { SettingsNotifications } from './pages/SettingsNotifications';
 import { SettingsDevelopment } from './pages/SettingsDevelopment';
 import { SettingsAbout } from './pages/SettingsAbout';
 import { useThemePreference, ThemePreference } from './contexts/theme-context';
@@ -145,7 +144,6 @@ export const App: React.FC = () => {
             <Route path="/settings/appearance" element={<SettingsAppearance />} />
             <Route path="/settings/backup" element={<SettingsBackup />} />
             <Route path="/settings/csv" element={<SettingsCsv />} />
-            <Route path="/settings/notifications" element={<SettingsNotifications />} />
             <Route path="/settings/development" element={<SettingsDevelopment />} />
             <Route path="/settings/about" element={<SettingsAbout />} />
           </Routes>

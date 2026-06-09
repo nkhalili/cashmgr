@@ -91,11 +91,13 @@ export default function SettingsScreen() {
       rows: [
         {
           label: 'Backup',
+          subtitle: 'Export & import JSON',
           route: '/settings-backup',
           icon: 'cloud-upload-outline',
         },
         {
           label: 'Transactions (CSV)',
+          subtitle: 'Export & import CSV',
           route: '/settings-csv',
           icon: 'document-text-outline',
         },
@@ -104,11 +106,6 @@ export default function SettingsScreen() {
     {
       header: 'App',
       rows: [
-        {
-          label: 'Data & Notifications',
-          route: '/settings-notifications',
-          icon: 'notifications-outline',
-        },
         {
           label: 'About',
           subtitle: 'Cash Mgr. · version & links',
@@ -124,6 +121,7 @@ export default function SettingsScreen() {
             rows: [
               {
                 label: 'Development Tools',
+                subtitle: 'Sample data & dev tools',
                 route: '/settings-development',
                 icon: 'construct-outline' as const,
               },
