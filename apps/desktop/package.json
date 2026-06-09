@@ -8,10 +8,10 @@
   "scripts": {
     "dev": "npm-run-all -p dev:*",
     "dev:web": "pnpm --filter @cashmgr/web dev",
-    "dev:electron": "tsc && NODE_ENV=development VITE_PORT=3000 electron .",
+    "dev:electron": "node build.mjs && NODE_ENV=development VITE_PORT=3000 electron .",
     "build": "npm-run-all build:*",
     "build:web": "pnpm --filter @cashmgr/web build",
-    "build:electron": "tsc",
+    "build:electron": "node build.mjs",
     "package": "electron-builder",
     "typecheck": "tsc --noEmit"
   },
@@ -26,6 +26,7 @@
     "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^20.11.5",
     "electron": "^28.1.4",
+    "esbuild": "^0.27.0",
     "electron-builder": "^24.9.1",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.3.3"
