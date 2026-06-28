@@ -8,7 +8,6 @@ import {
   AppError,
   RECURRING_FREQUENCY_LABELS,
   formatDate,
-  DEFAULT_CURRENCY,
 } from '@cashmgr/core';
 import {
   useRecurringTransactionsService,
@@ -34,8 +33,8 @@ function RecurringBadge({ isActive }: { isActive: boolean }) {
         borderRadius: 99,
         fontSize: 11,
         fontWeight: 600,
-        backgroundColor: isActive ? theme.colors.successSoft ?? '#d1fae5' : theme.colors.surfaceMuted,
-        color: isActive ? theme.colors.success ?? '#065f46' : theme.colors.textSecondary,
+        backgroundColor: isActive ? theme.colors.successSoft : theme.colors.surfaceMuted,
+        color: isActive ? theme.colors.success : theme.colors.textSecondary,
       }}
     >
       {isActive ? 'Active' : 'Paused'}

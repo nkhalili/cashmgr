@@ -568,7 +568,7 @@ export class MockDatabaseAdapter implements DatabaseAdapter {
       ...(input.frequency !== undefined && { frequency: input.frequency }),
       ...(input.startDate !== undefined && { startDate: input.startDate }),
       ...('endDate' in input && { endDate: input.endDate ?? undefined }),
-      ...(input.notes !== undefined && { notes: input.notes }),
+      ...(input.notes !== undefined && { notes: input.notes ?? undefined }),
       ...(input.isActive !== undefined && { isActive: input.isActive }),
       ...('lastGeneratedDate' in input && { lastGeneratedDate: input.lastGeneratedDate ?? undefined }),
       updatedAt: Date.now(),
