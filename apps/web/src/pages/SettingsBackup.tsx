@@ -64,7 +64,7 @@ export function SettingsBackup() {
         setImportPreview(null);
         setPendingImportContent(null);
         window.alert(
-          `Import complete: ${result.imported.accounts} accounts, ${result.imported.transactions} transactions, ${result.imported.categories} categories.`
+          `Import complete: ${result.imported.accounts} accounts, ${result.imported.transactions} transactions, ${result.imported.categories} categories, ${result.imported.currencies} currencies.`
         );
       } else {
         setError(result.errors.join('\n'));

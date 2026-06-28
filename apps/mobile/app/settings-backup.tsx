@@ -68,7 +68,7 @@ export default function SettingsBackupScreen() {
       if (result.success) {
         Alert.alert(
           'Import complete',
-          `Imported: ${result.imported.accounts} accounts, ${result.imported.transactions} transactions, ${result.imported.categories} categories.`
+          `Imported: ${result.imported.accounts} accounts, ${result.imported.transactions} transactions, ${result.imported.categories} categories, ${result.imported.currencies} currencies.`
         );
       } else {
         Alert.alert('Import failed', result.errors.join('\n'));

@@ -237,7 +237,7 @@ export async function importData(
   }
 
   const backup = JSON.parse(content) as ExportBackup;
-  const { accounts, transactions, categories, currencies, budgets = [], deletedBudgets = [], recurringTransactions = [], settings } = backup.data;
+  const { accounts, transactions, categories, currencies = [], budgets = [], deletedBudgets = [], recurringTransactions = [], settings } = backup.data;
 
   const refErrors = validateReferentialIntegrity(accounts, categories, transactions, budgets);
   if (refErrors.length > 0) {
