@@ -79,6 +79,12 @@ export default function SettingsScreen() {
           icon: 'pie-chart-outline',
         },
         {
+          label: 'Recurring Transactions',
+          subtitle: 'Scheduled repeating transactions',
+          route: '/settings-recurring',
+          icon: 'repeat-outline',
+        },
+        {
           label: 'Appearance',
           subtitle: THEME_LABELS[preference] ?? 'System',
           route: '/settings-appearance',

@@ -314,6 +314,7 @@ export const CreateTransactionInputSchema = z
     categoryId: z.string().optional(), // Optional for transfers
     toAccountId: z.string().optional(),
     notes: TransactionNotesSchema,
+    recurringTransactionId: z.string().optional(), // Internal: set by recurring generation
   })
   .strict()
   .refine(
@@ -431,3 +432,76 @@ export const PaginationSchema = z.object({
   offset: z.number().int().min(0).default(0),
   limit: z.number().int().min(1).max(100).default(20),
 });
+
+/**
+ * Recurring Transaction Schemas
+ */
+export const RecurringFrequencySchema = z.enum([
+  'daily',
+  'weekdays',
+  'weekends',
+  'weekly',
+  'biweekly',
+  'every4weeks',
+  'monthly',
+  'last_day_of_month',
+  'every6months',
+  'annually',
+], { message: 'Invalid recurrence frequency' });
+
+export const CreateRecurringTransactionInputSchema = z
+  .object({
+    type: TransactionTypeSchema,
+    amount: z.number().positive('Amount must be positive'),
+    currency: CurrencyCodeSchema,
+    accountId: z.string().min(1, 'Account is required'),
+    categoryId: z.string().optional(),
+    toAccountId: z.string().optional(),
+    notes: TransactionNotesSchema,
+    frequency: RecurringFrequencySchema,
+    startDate: DateStringSchema,
+    endDate: DateStringSchema.optional(),
+  })
+  .strict()
+  .refine(
+    (data) => {
+      if (data.type === 'transfer' && !data.toAccountId) return false;
+      return true;
+    },
+    { message: 'Transfer requires a destination account' }
+  )
+  .refine(
+    (data) => {
+      if (data.type !== 'transfer' && !data.categoryId) return false;
+      return true;
+    },
+    { message: 'Category is required for income and expense' }
+  )
+  .refine(
+    (data) => {
+      if (data.endDate && data.endDate <= data.startDate) return false;
+      return true;
+    },
+    { message: 'End date must be after start date' }
+  );
+
+export const UpdateRecurringTransactionInputSchema = z
+  .object({
+    id: z.string().min(1, 'ID is required'),
+    type: TransactionTypeSchema.optional(),
+    amount: z.number().positive('Amount must be positive').optional(),
+    currency: CurrencyCodeSchema.optional(),
+    accountId: z.string().min(1).optional(),
+    categoryId: z.string().nullable().optional(),
+    toAccountId: z.string().nullable().optional(),
+    notes: TransactionNotesSchema.nullable(),
+    frequency: RecurringFrequencySchema.optional(),
+    startDate: DateStringSchema.optional(),
+    endDate: DateStringSchema.nullable().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict()
+  .refine((data) => {
+    const { id, ...rest } = data;
+    return Object.keys(rest).length > 0;
+  }, 'At least one field must be provided for update');

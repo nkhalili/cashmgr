@@ -21,11 +21,15 @@ import {
   UpdateAccountInput,
   UpdateCategoryInput,
   UpdateTransactionInput,
+  RecurringTransaction,
+  CreateRecurringTransactionInput,
+  UpdateRecurringTransactionInput,
 } from '@cashmgr/core';
 import { AccountsRepository } from '../repositories/accounts-repository';
 import { BudgetsRepository } from '../repositories/budgets-repository';
 import { CategoriesRepository } from '../repositories/categories-repository';
 import { CurrenciesRepository } from '../repositories/currencies-repository';
+import { RecurringTransactionsRepository } from '../repositories/recurring-transactions-repository';
 import { SettingsRepository } from '../repositories/settings-repository';
 import { TransactionsRepository } from '../repositories/transactions-repository';
 import { SqliteDatabase } from '../sqlite/types';
@@ -36,6 +40,7 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
   private readonly budgetsRepository: BudgetsRepository;
   private readonly categoriesRepository: CategoriesRepository;
   private readonly currenciesRepository: CurrenciesRepository;
+  private readonly recurringTransactionsRepository: RecurringTransactionsRepository;
   private readonly settingsRepository: SettingsRepository;
   private readonly transactionsRepository: TransactionsRepository;
 
@@ -44,6 +49,7 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
     this.budgetsRepository = new BudgetsRepository(db);
     this.categoriesRepository = new CategoriesRepository(db);
     this.currenciesRepository = new CurrenciesRepository(db);
+    this.recurringTransactionsRepository = new RecurringTransactionsRepository(db);
     this.settingsRepository = new SettingsRepository(db);
     this.transactionsRepository = new TransactionsRepository(db);
   }
@@ -187,6 +193,7 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
     if (data.clearExisting) {
       // Delete in dependency order (transactions first, then accounts/categories)
       await this.db.execute('DELETE FROM transactions');
+      await this.db.execute('DELETE FROM recurring_transactions');
       await this.db.execute('DELETE FROM budgets');
       await this.db.execute('DELETE FROM accounts');
       await this.db.execute('DELETE FROM categories');
@@ -246,12 +253,12 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
     for (const tx of data.transactions ?? []) {
       await this.db.execute(
         `INSERT OR REPLACE INTO transactions
-          (id, type, amount, currency, date, account_id, category_id, to_account_id, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, type, amount, currency, date, account_id, category_id, to_account_id, notes, recurring_transaction_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           tx.id, tx.type, tx.amount, tx.currency, tx.date,
           tx.accountId, tx.categoryId ?? null, tx.toAccountId ?? null,
-          tx.notes ?? null,
+          tx.notes ?? null, tx.recurringTransactionId ?? null,
           tx.createdAt, tx.updatedAt,
         ],
       );
@@ -274,6 +281,22 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
           (id, category_id, amount, month, year, is_deleted, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
         [budget.id, budget.categoryId, budget.amount, budget.month, budget.year, budget.createdAt, budget.updatedAt],
+      );
+    }
+
+    // Upsert recurring transactions (accounts and categories must already exist)
+    for (const rt of data.recurringTransactions ?? []) {
+      await this.db.execute(
+        `INSERT OR REPLACE INTO recurring_transactions
+          (id, type, amount, currency, account_id, to_account_id, category_id, notes,
+           frequency, start_date, end_date, last_generated_date, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          rt.id, rt.type, rt.amount, rt.currency,
+          rt.accountId, rt.toAccountId ?? null, rt.categoryId ?? null, rt.notes ?? null,
+          rt.frequency, rt.startDate, rt.endDate ?? null, rt.lastGeneratedDate ?? null,
+          rt.isActive ? 1 : 0, rt.createdAt, rt.updatedAt,
+        ],
       );
     }
 
@@ -322,6 +345,31 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
 
   async deleteBudget(id: string): Promise<void> {
     await this.budgetsRepository.delete(id);
+  }
+
+  // Recurring transaction operations
+  async createRecurringTransaction(input: CreateRecurringTransactionInput): Promise<RecurringTransaction> {
+    return this.recurringTransactionsRepository.create(input);
+  }
+
+  async getRecurringTransactionById(id: string): Promise<RecurringTransaction | null> {
+    return this.recurringTransactionsRepository.findById(id);
+  }
+
+  async getRecurringTransactions(activeOnly = false): Promise<RecurringTransaction[]> {
+    return this.recurringTransactionsRepository.findAll(activeOnly);
+  }
+
+  async updateRecurringTransaction(input: UpdateRecurringTransactionInput): Promise<RecurringTransaction> {
+    return this.recurringTransactionsRepository.update(input);
+  }
+
+  async deleteRecurringTransaction(id: string): Promise<void> {
+    await this.recurringTransactionsRepository.delete(id);
+  }
+
+  async getTransactionsByRecurringId(recurringId: string): Promise<Transaction[]> {
+    return this.recurringTransactionsRepository.findTransactionsByRecurringId(recurringId);
   }
 
   // Migration operations (F-022)

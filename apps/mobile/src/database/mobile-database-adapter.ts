@@ -21,6 +21,9 @@ import {
   CreateBudgetInput,
   UpdateBudgetInput,
   BudgetWithProgress,
+  RecurringTransaction,
+  CreateRecurringTransactionInput,
+  UpdateRecurringTransactionInput,
   FilterParams,
   PaginationParams,
   DEFAULT_CURRENCY,
@@ -407,8 +410,8 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
     const now = Date.now();
 
     await this.db.runAsync(
-      `INSERT INTO transactions (id, type, amount, currency, date, account_id, category_id, to_account_id, notes, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions (id, type, amount, currency, date, account_id, category_id, to_account_id, notes, recurring_transaction_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.type,
@@ -416,9 +419,10 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
         input.currency ?? 'USD',
         input.date,
         input.accountId,
-        input.categoryId ?? null, // Null for transfers
+        input.categoryId ?? null,
         input.toAccountId ?? null,
         input.notes ?? null,
+        input.recurringTransactionId ?? null,
         now,
         now,
       ]
@@ -642,6 +646,7 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
     category_id: string | null; // Null for transfers
     to_account_id: string | null;
     notes: string | null;
+    recurring_transaction_id?: string | null;
     created_at: number;
     updated_at: number;
   }): Transaction {
@@ -652,9 +657,10 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
       currency: row.currency,
       date: row.date,
       accountId: row.account_id,
-      categoryId: row.category_id ?? undefined, // Undefined for transfers
+      categoryId: row.category_id ?? undefined,
       toAccountId: row.to_account_id ?? undefined,
       notes: row.notes ?? undefined,
+      recurringTransactionId: row.recurring_transaction_id ?? undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -1223,6 +1229,7 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
 
     if (data.clearExisting) {
       await this.db.execAsync('DELETE FROM transactions');
+      await this.db.execAsync('DELETE FROM recurring_transactions');
       await this.db.execAsync('DELETE FROM budgets');
       await this.db.execAsync('DELETE FROM accounts');
       await this.db.execAsync('DELETE FROM categories');
@@ -1282,12 +1289,12 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
     for (const tx of data.transactions ?? []) {
       await this.db.runAsync(
         `INSERT OR REPLACE INTO transactions
-          (id, type, amount, currency, date, account_id, category_id, to_account_id, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, type, amount, currency, date, account_id, category_id, to_account_id, notes, recurring_transaction_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           tx.id, tx.type, tx.amount, tx.currency, tx.date,
           tx.accountId, tx.categoryId ?? null, tx.toAccountId ?? null,
-          tx.notes ?? null,
+          tx.notes ?? null, tx.recurringTransactionId ?? null,
           tx.createdAt, tx.updatedAt,
         ]
       );
@@ -1313,6 +1320,22 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
       );
     }
 
+    // Recurring transactions (accounts and categories must already exist)
+    for (const rt of data.recurringTransactions ?? []) {
+      await this.db.runAsync(
+        `INSERT OR REPLACE INTO recurring_transactions
+          (id, type, amount, currency, account_id, to_account_id, category_id, notes,
+           frequency, start_date, end_date, last_generated_date, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          rt.id, rt.type, rt.amount, rt.currency,
+          rt.accountId, rt.toAccountId ?? null, rt.categoryId ?? null, rt.notes ?? null,
+          rt.frequency, rt.startDate, rt.endDate ?? null, rt.lastGeneratedDate ?? null,
+          rt.isActive ? 1 : 0, rt.createdAt, rt.updatedAt,
+        ]
+      );
+    }
+
     // Settings
     const now = Date.now();
     for (const [key, value] of Object.entries(data.settings ?? {})) {
@@ -1321,6 +1344,118 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
         [key, value as string, now]
       );
     }
+  }
+
+  // Recurring Transaction Operations
+  async createRecurringTransaction(input: CreateRecurringTransactionInput): Promise<RecurringTransaction> {
+    if (!this.db) throw new Error('Database not initialized');
+    const id = Crypto.randomUUID();
+    const now = Date.now();
+    await this.db.runAsync(
+      `INSERT INTO recurring_transactions
+        (id, type, amount, currency, account_id, to_account_id, category_id, notes,
+         frequency, start_date, end_date, last_generated_date, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      [
+        id, input.type, input.amount, input.currency ?? 'USD',
+        input.accountId, input.toAccountId ?? null, input.categoryId ?? null, input.notes ?? null,
+        input.frequency, input.startDate, input.endDate ?? null, null,
+        now, now,
+      ]
+    );
+    const rows = await this.db.getAllAsync<{ id: string; type: string; amount: number; currency: string; account_id: string; to_account_id: string | null; category_id: string | null; notes: string | null; frequency: string; start_date: string; end_date: string | null; last_generated_date: string | null; is_active: number; created_at: number; updated_at: number }>(
+      'SELECT * FROM recurring_transactions WHERE id = ?', [id]
+    );
+    return this.mapRowToRecurringTransaction(rows[0]);
+  }
+
+  async getRecurringTransactionById(id: string): Promise<RecurringTransaction | null> {
+    if (!this.db) throw new Error('Database not initialized');
+    const rows = await this.db.getAllAsync<{ id: string; type: string; amount: number; currency: string; account_id: string; to_account_id: string | null; category_id: string | null; notes: string | null; frequency: string; start_date: string; end_date: string | null; last_generated_date: string | null; is_active: number; created_at: number; updated_at: number }>(
+      'SELECT * FROM recurring_transactions WHERE id = ?', [id]
+    );
+    return rows.length > 0 ? this.mapRowToRecurringTransaction(rows[0]) : null;
+  }
+
+  async getRecurringTransactions(activeOnly = false): Promise<RecurringTransaction[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    const sql = activeOnly
+      ? 'SELECT * FROM recurring_transactions WHERE is_active = 1 ORDER BY created_at ASC'
+      : 'SELECT * FROM recurring_transactions ORDER BY created_at ASC';
+    const rows = await this.db.getAllAsync<{ id: string; type: string; amount: number; currency: string; account_id: string; to_account_id: string | null; category_id: string | null; notes: string | null; frequency: string; start_date: string; end_date: string | null; last_generated_date: string | null; is_active: number; created_at: number; updated_at: number }>(sql);
+    return rows.map((r) => this.mapRowToRecurringTransaction(r));
+  }
+
+  async updateRecurringTransaction(input: UpdateRecurringTransactionInput): Promise<RecurringTransaction> {
+    if (!this.db) throw new Error('Database not initialized');
+    const sets: string[] = [];
+    const params: (string | number | null)[] = [];
+
+    if (input.type !== undefined) { sets.push('type = ?'); params.push(input.type); }
+    if (input.amount !== undefined) { sets.push('amount = ?'); params.push(input.amount); }
+    if (input.currency !== undefined) { sets.push('currency = ?'); params.push(input.currency); }
+    if (input.accountId !== undefined) { sets.push('account_id = ?'); params.push(input.accountId); }
+    if ('toAccountId' in input) { sets.push('to_account_id = ?'); params.push(input.toAccountId ?? null); }
+    if ('categoryId' in input) { sets.push('category_id = ?'); params.push(input.categoryId ?? null); }
+    if (input.frequency !== undefined) { sets.push('frequency = ?'); params.push(input.frequency); }
+    if (input.startDate !== undefined) { sets.push('start_date = ?'); params.push(input.startDate); }
+    if ('endDate' in input) { sets.push('end_date = ?'); params.push(input.endDate ?? null); }
+    if ('notes' in input) { sets.push('notes = ?'); params.push(input.notes ?? null); }
+    if (input.isActive !== undefined) { sets.push('is_active = ?'); params.push(input.isActive ? 1 : 0); }
+    if ('lastGeneratedDate' in input) { sets.push('last_generated_date = ?'); params.push(input.lastGeneratedDate ?? null); }
+
+    if (sets.length === 0) {
+      const existing = await this.getRecurringTransactionById(input.id);
+      if (!existing) throw new Error(`RecurringTransaction ${input.id} not found`);
+      return existing;
+    }
+
+    sets.push('updated_at = ?');
+    params.push(Date.now());
+    params.push(input.id);
+
+    await this.db.runAsync(
+      `UPDATE recurring_transactions SET ${sets.join(', ')} WHERE id = ?`,
+      params
+    );
+
+    const updated = await this.getRecurringTransactionById(input.id);
+    if (!updated) throw new Error(`RecurringTransaction ${input.id} not found`);
+    return updated;
+  }
+
+  async deleteRecurringTransaction(id: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.runAsync('DELETE FROM recurring_transactions WHERE id = ?', [id]);
+  }
+
+  async getTransactionsByRecurringId(recurringId: string): Promise<Transaction[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    const rows = await this.db.getAllAsync<{ id: string; type: string; amount: number; currency: string; date: string; account_id: string; category_id: string | null; to_account_id: string | null; notes: string | null; recurring_transaction_id: string | null; created_at: number; updated_at: number }>(
+      'SELECT * FROM transactions WHERE recurring_transaction_id = ? ORDER BY date ASC',
+      [recurringId]
+    );
+    return rows.map((r) => this.mapRowToTransaction(r));
+  }
+
+  private mapRowToRecurringTransaction(row: { id: string; type: string; amount: number; currency: string; account_id: string; to_account_id: string | null; category_id: string | null; notes: string | null; frequency: string; start_date: string; end_date: string | null; last_generated_date: string | null; is_active: number; created_at: number; updated_at: number }): RecurringTransaction {
+    return {
+      id: row.id,
+      type: row.type as RecurringTransaction['type'],
+      amount: row.amount,
+      currency: row.currency,
+      accountId: row.account_id,
+      toAccountId: row.to_account_id ?? undefined,
+      categoryId: row.category_id ?? undefined,
+      notes: row.notes ?? undefined,
+      frequency: row.frequency as RecurringTransaction['frequency'],
+      startDate: row.start_date,
+      endDate: row.end_date ?? undefined,
+      lastGeneratedDate: row.last_generated_date ?? undefined,
+      isActive: row.is_active === 1,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
   }
 
   // Migration Operations (F-040: Basic implementation)

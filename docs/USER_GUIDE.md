@@ -11,11 +11,12 @@ CashMgr is a personal finance app that helps you track income, expenses, and tra
 3. [Transactions](#transactions)
 4. [Categories](#categories)
 5. [Budgets](#budgets)
-6. [Dashboard](#dashboard)
-7. [Currencies](#currencies)
-8. [Settings & Data Management](#settings--data-management)
-9. [About](#about)
-10. [Tips & Tricks](#tips--tricks)
+6. [Recurring Transactions](#recurring-transactions)
+7. [Dashboard](#dashboard)
+8. [Currencies](#currencies)
+9. [Settings & Data Management](#settings--data-management)
+10. [About](#about)
+11. [Tips & Tricks](#tips--tricks)
 
 ---
 
@@ -241,6 +242,47 @@ Use the `‹` and `›` buttons to move between months. You can review past mont
 
 ---
 
+## Recurring Transactions
+
+Recurring transactions let you schedule a transaction to repeat automatically on a fixed frequency — useful for subscriptions, salaries, rent, and other regular payments.
+
+### Setting Up a Recurring Transaction
+
+When adding a transaction, enable the **Make this recurring** toggle (below the Notes field). Choose a frequency and optionally set an end date.
+
+Supported frequencies:
+
+| Frequency | Repeats |
+| --- | --- |
+| Every Day | Daily |
+| Weekdays | Mon–Fri only |
+| Weekends | Sat–Sun only |
+| Every Week | Same day each week |
+| Every 2 Weeks | Every 14 days |
+| Every 4 Weeks | Every 28 days |
+| Every Month | Same calendar day each month |
+| Last Day of Month | Last calendar day of each month |
+| Every 6 Months | Twice a year |
+| Annually | Once a year |
+
+When you save, the app creates a recurring template and immediately generates all transactions due up to today.
+
+### How Generation Works
+
+Each time the app starts, it checks all active recurring templates and creates any transactions that have come due since the last run. This means if you haven't opened the app in a week, a daily recurring transaction will generate 7 entries automatically.
+
+### Managing Recurring Transactions
+
+Go to **Settings → Recurring Transactions** to see all your templates. Each entry shows the transaction type, amount, frequency, account, category, start/end dates, and active status at a glance.
+
+From there you can:
+
+- **Edit** — update the template's amount, frequency, account, category, dates, notes, or active state. Changes apply to future occurrences only; past transactions are not affected. Note: transaction type (expense/income/transfer) cannot be changed after creation.
+- **Pause / Resume** — toggle the **Active** switch in the edit screen to pause a template without deleting it. Paused templates are kept in the list but skipped during generation; no new transactions are created until you re-activate it. Transactions already created are not affected.
+- **Delete** — removes the template and deletes any future-dated generated transactions. Past transactions are kept.
+
+---
+
 ## Dashboard
 
 The Dashboard gives you a financial overview for any time period.
@@ -329,7 +371,7 @@ CashMgr can export all your data to a JSON backup file and restore it on any dev
 2. Tap **Export Data (JSON)**
 3. Save or share the `.json` file
 
-The backup includes accounts, categories, currencies, transactions, budgets (active and deleted), and settings. Budget tombstones (carry-forward stop signals) are included so that paused categories stay paused after a restore.
+The backup includes accounts, categories, currencies, transactions, budgets (active and deleted), recurring transaction templates, and settings. Budget tombstones (carry-forward stop signals) are included so that paused categories stay paused after a restore.
 
 #### Restoring a Backup
 

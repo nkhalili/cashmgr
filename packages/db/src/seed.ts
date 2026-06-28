@@ -318,6 +318,7 @@ export async function clearSeedData(db: SqliteDatabase): Promise<void> {
   try {
     // Delete in dependency order
     await db.execute('DELETE FROM transactions');
+    await db.execute('DELETE FROM recurring_transactions');
     await db.execute('DELETE FROM budgets');
     await db.execute('DELETE FROM categories');
     await db.execute('DELETE FROM accounts');

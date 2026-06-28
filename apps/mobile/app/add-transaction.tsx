@@ -23,10 +23,14 @@ import {
   CreateTransactionInputSchema,
   DEFAULT_CURRENCY,
   getTodayDateString,
+  RecurringFrequency,
+  RECURRING_FREQUENCY_LABELS,
+  RECURRING_FREQUENCIES,
 } from '@cashmgr/core';
 import {
   useAccountsService,
   useCategoriesService,
+  useRecurringTransactionsService,
   useTransactionsService,
 } from '../src/contexts/services-context';
 import { useFormValidation } from '../src/hooks/useFormValidation';
@@ -38,7 +42,7 @@ const TRANSACTION_TYPES: { label: string; value: TransactionType }[] = [
   { label: 'Transfer', value: 'transfer' },
 ];
 
-type ModalType = 'account' | 'toAccount' | 'category' | null;
+type ModalType = 'account' | 'toAccount' | 'category' | 'frequency' | null;
 
 export default function AddTransactionScreen() {
   const theme = useTheme();
@@ -47,6 +51,7 @@ export default function AddTransactionScreen() {
   const params = useLocalSearchParams<{ accountId?: string; source?: string }>();
   const accountsService = useAccountsService();
   const categoriesService = useCategoriesService();
+  const recurringTransactionsService = useRecurringTransactionsService();
   const transactionsService = useTransactionsService();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const keyboardHeight = useKeyboardHeight();
@@ -61,6 +66,11 @@ export default function AddTransactionScreen() {
   const [categoryId, setCategoryId] = React.useState('');
   const [toAccountId, setToAccountId] = React.useState('');
   const [notes, setNotes] = React.useState('');
+
+  // Recurrence state
+  const [isRecurring, setIsRecurring] = React.useState(false);
+  const [recurringFrequency, setRecurringFrequency] = React.useState<RecurringFrequency>('monthly');
+  const [recurringEndDate, setRecurringEndDate] = React.useState('');
 
   // Data state
   const [accounts, setAccounts] = React.useState<Account[]>([]);
@@ -218,6 +228,9 @@ export default function AddTransactionScreen() {
     setCategoryId('');
     setToAccountId('');
     setNotes('');
+    setIsRecurring(false);
+    setRecurringFrequency('monthly');
+    setRecurringEndDate('');
     clearErrors();
     setError(null);
     setSuccess(null);
@@ -236,11 +249,27 @@ export default function AddTransactionScreen() {
     setSuccess(null);
 
     try {
-      await transactionsService.createTransaction(formValues);
-      setSuccess('Transaction created successfully!');
+      if (isRecurring) {
+        await recurringTransactionsService.createRecurringTransaction({
+          type: formValues.type,
+          amount: formValues.amount,
+          currency: formValues.currency,
+          accountId: formValues.accountId,
+          categoryId: formValues.categoryId,
+          toAccountId: formValues.toAccountId,
+          notes: formValues.notes,
+          frequency: recurringFrequency,
+          startDate: formValues.date,
+          endDate: recurringEndDate || undefined,
+        });
+        await recurringTransactionsService.generateDueTransactions();
+        setSuccess('Recurring transaction created!');
+      } else {
+        await transactionsService.createTransaction(formValues);
+        setSuccess('Transaction created successfully!');
+      }
       resetForm();
 
-      // Navigate to transactions tab after a short delay
       setTimeout(() => {
         router.replace('/transactions');
       }, 1000);
@@ -252,7 +281,7 @@ export default function AddTransactionScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [getFormValues, validateAll, transactionsService, resetForm, router]);
+  }, [getFormValues, validateAll, transactionsService, recurringTransactionsService, isRecurring, recurringFrequency, recurringEndDate, resetForm, router]);
 
   // Handle type change
   const handleTypeChange = React.useCallback(
@@ -447,6 +476,64 @@ export default function AddTransactionScreen() {
               onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 150)}
             />
           </View>
+
+          {/* Recurrence */}
+          <View style={[styles.fieldContainer, { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing.md }]}>
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+              onPress={() => setIsRecurring(!isRecurring)}
+              activeOpacity={0.7}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.label, { marginBottom: 2 }]}>Make recurring</Text>
+                <Text style={{ fontSize: theme.typography.caption.fontSize, color: theme.colors.textSecondary }}>
+                  Repeat this transaction on a schedule
+                </Text>
+              </View>
+              <View
+                style={{
+                  width: 44,
+                  height: 26,
+                  borderRadius: 13,
+                  backgroundColor: isRecurring ? theme.colors.primary : theme.colors.border,
+                  justifyContent: 'center',
+                  paddingHorizontal: 3,
+                }}
+              >
+                <View
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    backgroundColor: '#fff',
+                    alignSelf: isRecurring ? 'flex-end' : 'flex-start',
+                  }}
+                />
+              </View>
+            </TouchableOpacity>
+
+            {isRecurring && (
+              <View style={{ marginTop: theme.spacing.md, gap: theme.spacing.md }}>
+                <View>
+                  <Text style={styles.label}>Frequency</Text>
+                  <TouchableOpacity
+                    style={styles.selectField}
+                    onPress={() => setActiveModal('frequency')}
+                  >
+                    <Text style={styles.selectFieldText}>
+                      {RECURRING_FREQUENCY_LABELS[recurringFrequency]}
+                    </Text>
+                    <Text style={styles.selectFieldArrow}>›</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateInput
+                  label="End date (optional)"
+                  value={recurringEndDate}
+                  onChange={setRecurringEndDate}
+                />
+              </View>
+            )}
+          </View>
         </View>
 
         {!isLoading && accounts.length === 0 && (
@@ -479,7 +566,9 @@ export default function AddTransactionScreen() {
             {isSubmitting ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={styles.submitButtonText}>Save transaction</Text>
+              <Text style={styles.submitButtonText}>
+                {isRecurring ? 'Save recurring' : 'Save transaction'}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
@@ -583,6 +672,35 @@ export default function AddTransactionScreen() {
                 </Pressable>
               ))
             )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Frequency Selection Modal */}
+      <Modal
+        visible={activeModal === 'frequency'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setActiveModal(null)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Frequency</Text>
+            <Pressable onPress={() => setActiveModal(null)}>
+              <Text style={styles.modalClose}>Done</Text>
+            </Pressable>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            {RECURRING_FREQUENCIES.map((freq) => (
+              <Pressable
+                key={freq}
+                style={styles.modalOption}
+                onPress={() => { setRecurringFrequency(freq); setActiveModal(null); }}
+              >
+                <Text style={styles.modalOptionText}>{RECURRING_FREQUENCY_LABELS[freq]}</Text>
+                {recurringFrequency === freq && <Text style={styles.modalOptionCheck}>✓</Text>}
+              </Pressable>
+            ))}
           </ScrollView>
         </View>
       </Modal>

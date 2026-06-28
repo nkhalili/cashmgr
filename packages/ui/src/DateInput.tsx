@@ -57,7 +57,10 @@ export const DateInput: React.FC<DateInputProps> = ({
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setTextValue(newValue);
-    // Only update parent if it looks like a complete date
+    if (!newValue) {
+      onChange('');
+      return;
+    }
     if (newValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
       const corrected = validateAndCorrectDate(newValue);
       if (corrected && corrected !== newValue) {
@@ -69,14 +72,14 @@ export const DateInput: React.FC<DateInputProps> = ({
 
   const handleTextBlur = () => {
     setIsFocused(false);
-    // Validate and correct on blur
     const corrected = validateAndCorrectDate(textValue);
     if (corrected && corrected !== textValue) {
       setTextValue(corrected);
       onChange(corrected);
     } else if (textValue && !corrected) {
-      // Invalid date, keep the text but notify parent
       onChange(textValue);
+    } else if (!textValue) {
+      onChange('');
     }
     onBlur?.();
   };

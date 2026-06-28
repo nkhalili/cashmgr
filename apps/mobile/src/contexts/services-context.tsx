@@ -6,6 +6,7 @@ import { BudgetsService } from '../services/budgets-service';
 import { CategoriesService } from '../services/categories-service';
 import { CurrenciesService } from '../services/currencies-service';
 import { DashboardService } from '../services/dashboard-service';
+import { RecurringTransactionsService } from '../services/recurring-transactions-service';
 import { TransactionsService } from '../services/transactions-service';
 import { AppError, ErrorHandler } from '@cashmgr/core';
 import type { DatabaseAdapter } from '@cashmgr/core';
@@ -17,6 +18,7 @@ interface ServicesContextValue {
   categoriesService: CategoriesService;
   currenciesService: CurrenciesService;
   dashboardService: DashboardService;
+  recurringTransactionsService: RecurringTransactionsService;
   transactionsService: TransactionsService;
 }
 
@@ -40,6 +42,13 @@ export const ServicesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           return;
         }
 
+        const transactionsService = new TransactionsService(adapter);
+        const recurringTransactionsService = new RecurringTransactionsService(adapter, transactionsService);
+
+        // Generate pending recurring transactions before making the app usable
+        // so the Settings > Recurring page always shows the current lastGeneratedDate.
+        await recurringTransactionsService.generateDueTransactions();
+
         setValue({
           adapter,
           accountsService: new AccountsService(adapter),
@@ -47,7 +56,8 @@ export const ServicesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           categoriesService: new CategoriesService(adapter),
           currenciesService: new CurrenciesService(adapter),
           dashboardService: new DashboardService(adapter),
-          transactionsService: new TransactionsService(adapter),
+          recurringTransactionsService,
+          transactionsService,
         });
       } catch (err) {
         // F-024: Use ErrorHandler for centralized error handling
@@ -133,6 +143,14 @@ export function useTransactionsService(): TransactionsService {
     throw new Error('ServicesProvider is missing from component tree.');
   }
   return ctx.transactionsService;
+}
+
+export function useRecurringTransactionsService(): RecurringTransactionsService {
+  const ctx = React.useContext(ServicesContext);
+  if (!ctx) {
+    throw new Error('ServicesProvider is missing from component tree.');
+  }
+  return ctx.recurringTransactionsService;
 }
 
 export function useDashboardService(): DashboardService {

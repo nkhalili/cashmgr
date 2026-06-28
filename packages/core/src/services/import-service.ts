@@ -3,6 +3,7 @@ import type { Account } from '../models/Account';
 import type { Category } from '../models/Category';
 import type { Transaction } from '../models/Transaction';
 import type { Budget } from '../models/Budget';
+import type { RecurringTransaction } from '../models/RecurringTransaction';
 import type { ExportBackup } from './export-service';
 import { EXPORT_SCHEMA_VERSION } from './export-service';
 import { isValidISODate } from '../utils/date-validation';
@@ -18,6 +19,7 @@ export interface ImportPreview {
     categories: number;
     currencies: number;
     budgets: number;
+    recurringTransactions: number;
   };
 }
 
@@ -29,6 +31,7 @@ export interface ImportResult {
     categories: number;
     currencies: number;
     budgets: number;
+    recurringTransactions: number;
   };
   errors: string[];
 }
@@ -38,7 +41,7 @@ export type ImportMode = 'replace' | 'merge';
 const MAX_VALIDATION_ERRORS = 10;
 
 export function previewImport(content: string): ImportPreview {
-  const empty = { accounts: 0, transactions: 0, categories: 0, currencies: 0, budgets: 0 };
+  const empty = { accounts: 0, transactions: 0, categories: 0, currencies: 0, budgets: 0, recurringTransactions: 0 };
 
   let parsed: unknown;
   try {
@@ -80,12 +83,14 @@ export function previewImport(content: string): ImportPreview {
   const categories = Array.isArray(data.categories) ? (data.categories as unknown[]) : [];
   const currencies = Array.isArray(data.currencies) ? (data.currencies as unknown[]) : [];
   const budgets = Array.isArray(data.budgets) ? (data.budgets as unknown[]) : [];
+  const recurringTransactions = Array.isArray(data.recurringTransactions) ? (data.recurringTransactions as unknown[]) : [];
 
   errors.push(...validateEntities(accounts, ['id', 'name', 'type'], 'account'));
   errors.push(...validateEntities(categories, ['id', 'name', 'type'], 'category'));
   errors.push(...validateEntities(currencies, ['id', 'name', 'symbol'], 'currency'));
   errors.push(...validateTransactionEntities(transactions));
   errors.push(...validateBudgetEntities(budgets));
+  errors.push(...validateRecurringTransactionEntities(recurringTransactions));
 
   return {
     isValid: errors.length === 0,
@@ -97,6 +102,7 @@ export function previewImport(content: string): ImportPreview {
       categories: categories.length,
       currencies: currencies.length,
       budgets: budgets.length,
+      recurringTransactions: recurringTransactions.length,
     },
   };
 }
@@ -163,6 +169,27 @@ function validateBudgetEntities(budgets: unknown[]): string[] {
   return errors;
 }
 
+function validateRecurringTransactionEntities(rts: unknown[]): string[] {
+  const errors: string[] = [];
+  for (let i = 0; i < rts.length && errors.length < MAX_VALIDATION_ERRORS; i++) {
+    const obj = rts[i];
+    if (!obj || typeof obj !== 'object') {
+      errors.push(`recurringTransaction[${i}]: must be an object`);
+      continue;
+    }
+    const rt = obj as Record<string, unknown>;
+    if (!rt.id) errors.push(`recurringTransaction[${i}]: missing id`);
+    if (!rt.type) errors.push(`recurringTransaction[${i}]: missing type`);
+    if (typeof rt.amount !== 'number' || rt.amount <= 0) errors.push(`recurringTransaction[${i}]: invalid amount`);
+    if (!rt.accountId) errors.push(`recurringTransaction[${i}]: missing accountId`);
+    if (!rt.frequency) errors.push(`recurringTransaction[${i}]: missing frequency`);
+    if (typeof rt.startDate !== 'string' || !isValidISODate(rt.startDate)) {
+      errors.push(`recurringTransaction[${i}]: invalid startDate`);
+    }
+  }
+  return errors;
+}
+
 function validateReferentialIntegrity(
   accounts: Account[],
   categories: Category[],
@@ -202,7 +229,7 @@ export async function importData(
   content: string,
   mode: ImportMode,
 ): Promise<ImportResult> {
-  const empty = { accounts: 0, transactions: 0, categories: 0, currencies: 0, budgets: 0 };
+  const empty = { accounts: 0, transactions: 0, categories: 0, currencies: 0, budgets: 0, recurringTransactions: 0 };
   const preview = previewImport(content);
 
   if (!preview.isValid) {
@@ -210,7 +237,7 @@ export async function importData(
   }
 
   const backup = JSON.parse(content) as ExportBackup;
-  const { accounts, transactions, categories, currencies, budgets = [], deletedBudgets = [], settings } = backup.data;
+  const { accounts, transactions, categories, currencies, budgets = [], deletedBudgets = [], recurringTransactions = [], settings } = backup.data;
 
   const refErrors = validateReferentialIntegrity(accounts, categories, transactions, budgets);
   if (refErrors.length > 0) {
@@ -223,14 +250,16 @@ export async function importData(
   let upsertTransactions = transactions;
   let upsertBudgets = budgets;
   let upsertDeletedBudgets = deletedBudgets;
+  let upsertRecurringTransactions: RecurringTransaction[] = recurringTransactions;
 
   if (mode === 'merge') {
-    const [existingAccounts, existingCategories, existingCurrencies, existingBudgets, existingTombstones] = await Promise.all([
+    const [existingAccounts, existingCategories, existingCurrencies, existingBudgets, existingTombstones, existingRecurring] = await Promise.all([
       db.getAccounts(),
       db.getCategories(false),
       db.getCurrencies(false),
       db.getAllBudgets(),
       db.getEffectiveTombstones(),
+      db.getRecurringTransactions(false),
     ]);
 
     const existingAccountMap = new Map(existingAccounts.map((a) => [a.id, a.updatedAt]));
@@ -240,6 +269,7 @@ export async function importData(
       ...existingBudgets.map((b) => [b.id, b.updatedAt] as [string, number]),
       ...existingTombstones.map((b) => [b.id, b.updatedAt] as [string, number]),
     ]);
+    const existingRecurringMap = new Map(existingRecurring.map((r) => [r.id, r.updatedAt]));
 
     const existingTxIds = new Set<string>();
     let offset = 0;
@@ -271,6 +301,10 @@ export async function importData(
       const existing = existingBudgetMap.get(b.id);
       return existing === undefined || b.updatedAt > existing;
     });
+    upsertRecurringTransactions = recurringTransactions.filter((r) => {
+      const existing = existingRecurringMap.get(r.id);
+      return existing === undefined || r.updatedAt > existing;
+    });
   }
 
   const upsertData: BulkUpsertData = {
@@ -280,6 +314,7 @@ export async function importData(
     transactions: upsertTransactions,
     budgets: upsertBudgets,
     deletedBudgets: upsertDeletedBudgets,
+    recurringTransactions: upsertRecurringTransactions,
     settings: settings ?? {},
     clearExisting: mode === 'replace',
   };
@@ -296,6 +331,7 @@ export async function importData(
         categories: upsertCategories.length,
         currencies: upsertCurrencies.length,
         budgets: upsertBudgets.length,
+        recurringTransactions: upsertRecurringTransactions.length,
       },
       errors: [],
     };

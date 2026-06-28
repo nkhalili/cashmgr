@@ -4,6 +4,7 @@ export * from './models/Account';
 export * from './models/Category';
 export * from './models/Currency';
 export * from './models/Budget';
+export * from './models/RecurringTransaction';
 
 // Types
 export * from './types';
@@ -33,6 +34,9 @@ export * from './services/logger';
 export * from './services/export-service';
 export * from './services/import-service';
 export * from './services/csv-import-service';
+
+// Utilities
+export * from './utils/recurring-dates';
 
 // API Integration (F-030)
 export * from './api/exchange-rate-api';

@@ -4,13 +4,14 @@ import type { Category } from '../models/Category';
 import type { Currency } from '../models/Currency';
 import type { Transaction } from '../models/Transaction';
 import type { Budget } from '../models/Budget';
+import type { RecurringTransaction } from '../models/RecurringTransaction';
 import { getTodayDateString } from '../utils/date';
 
-export const EXPORT_SCHEMA_VERSION = 5;
+export const EXPORT_SCHEMA_VERSION = 6;
 
 export interface ExportOptions {
   format: 'json' | 'csv';
-  entities?: ('accounts' | 'transactions' | 'categories' | 'currencies' | 'budgets' | 'settings')[];
+  entities?: ('accounts' | 'transactions' | 'categories' | 'currencies' | 'budgets' | 'recurringTransactions' | 'settings')[];
   dateRange?: { startDate: string; endDate: string };
   platform?: string;
 }
@@ -36,6 +37,7 @@ export interface ExportBackup {
     transactions: Transaction[];
     budgets: Budget[];
     deletedBudgets: Budget[];
+    recurringTransactions?: RecurringTransaction[];
     settings: Record<string, string>;
   };
 }
@@ -75,7 +77,7 @@ async function exportJSON(
   options: ExportOptions,
   today: string,
 ): Promise<ExportResult> {
-  const entities = options.entities ?? ['accounts', 'transactions', 'categories', 'currencies', 'budgets', 'settings'];
+  const entities = options.entities ?? ['accounts', 'transactions', 'categories', 'currencies', 'budgets', 'recurringTransactions', 'settings'];
 
   const data: ExportBackup['data'] = {
     accounts: [],
@@ -84,6 +86,7 @@ async function exportJSON(
     transactions: [],
     budgets: [],
     deletedBudgets: [],
+    recurringTransactions: [],
     settings: {},
   };
 
@@ -102,6 +105,9 @@ async function exportJSON(
   if (entities.includes('budgets')) {
     data.budgets = await db.getAllBudgets();
     data.deletedBudgets = await db.getEffectiveTombstones();
+  }
+  if (entities.includes('recurringTransactions')) {
+    data.recurringTransactions = await db.getRecurringTransactions(false);
   }
   if (entities.includes('settings')) {
     data.settings = await db.getAllSettings();
