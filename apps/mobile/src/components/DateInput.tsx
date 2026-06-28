@@ -94,7 +94,10 @@ export function DateInput({
 
   const handleTextChange = (text: string) => {
     setTextValue(text);
-    // Only update parent if it looks like a complete date
+    if (!text) {
+      onChange('');
+      return;
+    }
     if (text.match(/^\d{4}-\d{2}-\d{2}$/)) {
       const corrected = validateAndCorrectDate(text);
       if (corrected && corrected !== text) {
@@ -111,6 +114,8 @@ export function DateInput({
       onChange(corrected);
     } else if (textValue && !corrected) {
       onChange(textValue);
+    } else if (!textValue) {
+      onChange('');
     }
   };
 

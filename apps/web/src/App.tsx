@@ -14,6 +14,8 @@ import { SettingsBackup } from './pages/SettingsBackup';
 import { SettingsCsv } from './pages/SettingsCsv';
 import { SettingsDevelopment } from './pages/SettingsDevelopment';
 import { SettingsAbout } from './pages/SettingsAbout';
+import { SettingsRecurringTransactions } from './pages/SettingsRecurringTransactions';
+import { SettingsRecurringEdit } from './pages/SettingsRecurringEdit';
 import { useThemePreference, ThemePreference } from './contexts/theme-context';
 import { UpdateBanner } from './components/UpdateBanner';
 import './App.css';
@@ -144,6 +146,8 @@ export const App: React.FC = () => {
             <Route path="/settings/appearance" element={<SettingsAppearance />} />
             <Route path="/settings/backup" element={<SettingsBackup />} />
             <Route path="/settings/csv" element={<SettingsCsv />} />
+            <Route path="/settings/recurring" element={<SettingsRecurringTransactions />} />
+            <Route path="/settings/recurring/:id/edit" element={<SettingsRecurringEdit />} />
             <Route path="/settings/development" element={<SettingsDevelopment />} />
             <Route path="/settings/about" element={<SettingsAbout />} />
           </Routes>

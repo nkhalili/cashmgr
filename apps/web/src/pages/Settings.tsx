@@ -49,6 +49,7 @@ export function Settings() {
       rows: [
         { label: 'Currencies', subtitle: primaryCurrencyId ?? undefined, route: '/settings/currencies', icon: '💱' },
         { label: 'Budgets', subtitle: 'Monthly category budgets', route: '/settings/budgets', icon: '📊' },
+        { label: 'Recurring Transactions', subtitle: 'Scheduled repeating transactions', route: '/settings/recurring', icon: '🔁' },
         { label: 'Appearance', subtitle: THEME_LABELS[preference] ?? 'System', route: '/settings/appearance', icon: '🎨' },
       ],
     },

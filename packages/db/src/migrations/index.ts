@@ -272,6 +272,61 @@ const MIGRATION_007: Migration = {
 };
 
 /**
+ * Migration 008: Recurring Transactions Table
+ * Adds recurring_transactions table for scheduling repeating transactions.
+ */
+const MIGRATION_008: Migration = {
+  version: 8,
+  description: 'Add recurring_transactions table',
+  up: [
+    `CREATE TABLE IF NOT EXISTS recurring_transactions (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL CHECK (type IN ('income','expense','transfer')),
+      amount REAL NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      account_id TEXT NOT NULL,
+      to_account_id TEXT,
+      category_id TEXT,
+      notes TEXT,
+      frequency TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT,
+      last_generated_date TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+      FOREIGN KEY (to_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+    );`,
+    'CREATE INDEX IF NOT EXISTS idx_recurring_active ON recurring_transactions(is_active);',
+    'CREATE INDEX IF NOT EXISTS idx_recurring_account ON recurring_transactions(account_id);',
+  ],
+  down: [
+    'DROP INDEX IF EXISTS idx_recurring_account;',
+    'DROP INDEX IF EXISTS idx_recurring_active;',
+    'DROP TABLE IF EXISTS recurring_transactions;',
+  ],
+};
+
+/**
+ * Migration 009: Add recurring_transaction_id to transactions
+ * Links generated transactions back to their recurring template.
+ */
+const MIGRATION_009: Migration = {
+  version: 9,
+  description: 'Add recurring_transaction_id column to transactions',
+  up: [
+    'ALTER TABLE transactions ADD COLUMN recurring_transaction_id TEXT;',
+    'CREATE INDEX IF NOT EXISTS idx_transactions_recurring ON transactions(recurring_transaction_id);',
+  ],
+  down: [
+    'DROP INDEX IF EXISTS idx_transactions_recurring;',
+    // SQLite < 3.35 does not support DROP COLUMN; rebuild if needed
+  ],
+};
+
+/**
  * All migrations in order
  * IMPORTANT: Never modify existing migrations!
  * Always add new migrations with incremented version numbers.
@@ -284,6 +339,8 @@ export const migrations: Migration[] = [
   MIGRATION_005,
   MIGRATION_006,
   MIGRATION_007,
+  MIGRATION_008,
+  MIGRATION_009,
   // Future migrations go here
 ];
 

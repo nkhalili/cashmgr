@@ -14,6 +14,7 @@ import type {
   Currency,
   Budget,
   BudgetWithProgress,
+  RecurringTransaction,
   CreateAccountInput,
   CreateBudgetInput,
   CreateCategoryInput,
@@ -23,6 +24,8 @@ import type {
   UpdateBudgetInput,
   UpdateCategoryInput,
   UpdateTransactionInput,
+  CreateRecurringTransactionInput,
+  UpdateRecurringTransactionInput,
   DashboardFilter,
   CategoryAggregation,
   DashboardSummary,
@@ -33,6 +36,7 @@ export class MockDatabaseAdapter implements DatabaseAdapter {
   private categories: Category[] = [];
   private transactions: Transaction[] = [];
   private currencies: Currency[] = [];
+  private recurringTransactions: RecurringTransaction[] = [];
   private idCounter = 1;
 
   // Accounts
@@ -203,6 +207,7 @@ export class MockDatabaseAdapter implements DatabaseAdapter {
       accountId: input.accountId,
       toAccountId: input.toAccountId || undefined,
       categoryId: input.categoryId || undefined,
+      recurringTransactionId: input.recurringTransactionId || undefined,
       createdAt: now,
       updatedAt: now,
     };
@@ -519,6 +524,68 @@ export class MockDatabaseAdapter implements DatabaseAdapter {
     }
   }
 
+  // Recurring Transactions
+  async createRecurringTransaction(input: CreateRecurringTransactionInput): Promise<RecurringTransaction> {
+    const now = Date.now();
+    const rt: RecurringTransaction = {
+      id: `rt-${this.idCounter++}`,
+      type: input.type,
+      amount: input.amount,
+      currency: input.currency ?? 'USD',
+      accountId: input.accountId,
+      toAccountId: input.toAccountId,
+      categoryId: input.categoryId,
+      notes: input.notes,
+      frequency: input.frequency,
+      startDate: input.startDate,
+      endDate: input.endDate ?? undefined,
+      lastGeneratedDate: undefined,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.recurringTransactions.push(rt);
+    return rt;
+  }
+
+  async getRecurringTransactionById(id: string): Promise<RecurringTransaction | null> {
+    return this.recurringTransactions.find((rt) => rt.id === id) ?? null;
+  }
+
+  async getRecurringTransactions(activeOnly = false): Promise<RecurringTransaction[]> {
+    if (activeOnly) return this.recurringTransactions.filter((rt) => rt.isActive);
+    return [...this.recurringTransactions];
+  }
+
+  async updateRecurringTransaction(input: UpdateRecurringTransactionInput): Promise<RecurringTransaction> {
+    const idx = this.recurringTransactions.findIndex((rt) => rt.id === input.id);
+    if (idx === -1) throw new Error(`RecurringTransaction ${input.id} not found`);
+    const existing = this.recurringTransactions[idx];
+    this.recurringTransactions[idx] = {
+      ...existing,
+      ...(input.type !== undefined && { type: input.type }),
+      ...(input.amount !== undefined && { amount: input.amount }),
+      ...(input.frequency !== undefined && { frequency: input.frequency }),
+      ...(input.startDate !== undefined && { startDate: input.startDate }),
+      ...('endDate' in input && { endDate: input.endDate ?? undefined }),
+      ...(input.notes !== undefined && { notes: input.notes }),
+      ...(input.isActive !== undefined && { isActive: input.isActive }),
+      ...('lastGeneratedDate' in input && { lastGeneratedDate: input.lastGeneratedDate ?? undefined }),
+      updatedAt: Date.now(),
+    };
+    return this.recurringTransactions[idx];
+  }
+
+  async deleteRecurringTransaction(id: string): Promise<void> {
+    const idx = this.recurringTransactions.findIndex((rt) => rt.id === id);
+    if (idx === -1) throw new Error(`RecurringTransaction ${id} not found`);
+    this.recurringTransactions.splice(idx, 1);
+  }
+
+  async getTransactionsByRecurringId(recurringId: string): Promise<Transaction[]> {
+    return this.transactions.filter((t) => t.recurringTransactionId === recurringId);
+  }
+
   // Lifecycle / migrations (stubs)
   async initialize(): Promise<void> {}
   async close(): Promise<void> {}
@@ -532,6 +599,7 @@ export class MockDatabaseAdapter implements DatabaseAdapter {
     this.categories = [];
     this.transactions = [];
     this.currencies = [];
+    this.recurringTransactions = [];
     this.idCounter = 1;
   }
 

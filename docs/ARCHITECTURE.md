@@ -66,7 +66,9 @@ Indexes: `idx_accounts_type` on `type`
 | createdAt | number | NO | — | Unix timestamp ms |
 | updatedAt | number | NO | — | Unix timestamp ms |
 
-Indexes: `idx_transactions_account_id`, `idx_transactions_date`, `idx_transactions_type`
+| recurringTransactionId | string | YES | NULL | FK → recurring_transactions (nullable) |
+
+Indexes: `idx_transactions_account_id`, `idx_transactions_date`, `idx_transactions_type`, `idx_transactions_recurring`
 
 ### `categories`
 
@@ -112,6 +114,30 @@ Indexes: `idx_transactions_account_id`, `idx_transactions_date`, `idx_transactio
 Unique constraint: `(category_id, month, year)` — one budget per category per month.
 Indexes: `idx_budgets_period` on `(year, month)`, `idx_budgets_category` on `category_id`, `idx_budgets_active` on `(is_deleted)`
 
+### `recurring_transactions`
+
+| Field | Type | Nullable | Default | Notes |
+| --- | --- | --- | --- | --- |
+| id | string | NO | uuid | Primary key |
+| type | string | NO | — | `income` \| `expense` \| `transfer` |
+| amount | number | NO | — | Positive number |
+| currency | string | NO | USD | ISO 4217 |
+| accountId | string | NO | — | FK → accounts (ON DELETE CASCADE) |
+| toAccountId | string | YES | NULL | FK → accounts (transfer only) |
+| categoryId | string | YES | NULL | FK → categories |
+| notes | string | YES | NULL | |
+| frequency | string | NO | — | See `RecurringFrequency` |
+| startDate | string | NO | — | YYYY-MM-DD — anchor date for schedule |
+| endDate | string | YES | NULL | YYYY-MM-DD — stop generating after this date |
+| lastGeneratedDate | string | YES | NULL | YYYY-MM-DD — last date a transaction was created |
+| isActive | boolean | NO | true | Deactivated on delete |
+| createdAt | number | NO | — | Unix timestamp ms |
+| updatedAt | number | NO | — | Unix timestamp ms |
+
+`frequency` values: `daily`, `weekdays`, `weekends`, `weekly`, `biweekly`, `every4weeks`, `monthly`, `last_day_of_month`, `every6months`, `annually`
+
+Indexes: `idx_recurring_active` on `is_active`, `idx_recurring_account` on `account_id`
+
 ### `settings`
 
 | Field | Type | Notes |
@@ -153,6 +179,7 @@ apps/web/src/services/
   categories-service.ts
   currencies-service.ts
   dashboard-service.ts
+  recurring-transactions-service.ts
 
 apps/mobile/src/services/
   (same structure)
@@ -165,6 +192,24 @@ apps/mobile/src/services/
 - Transfer: `-amount` from `accountId`, `+amount` to `toAccountId`
 - On edit: reverse old effect, apply new effect
 - On delete: reverse transaction's effect
+
+### Recurring Transactions
+
+Recurring transactions automate periodic expense/income generation. The feature has three layers:
+
+**Template (`recurring_transactions` table)**
+Stores the schedule: frequency, startDate, endDate, lastGeneratedDate. A template is never edited in-place for past dates — only future-dated generated transactions are affected.
+
+**Generation (`RecurringTransactionsService.generateDueTransactions`)**
+Called at app startup. For each active template, `getDueOccurrences(frequency, startDate, lastGeneratedDate, endDate, today)` computes all dates between `lastGeneratedDate + 1 day` and today, then `transactionsService.createTransaction` is called for each date. The template's `lastGeneratedDate` is advanced to the last generated date.
+
+Edit/Delete semantics:
+
+- Edit: deletes all generated transactions dated ≥ today and resets `lastGeneratedDate` to yesterday, so they regenerate with the updated template values on next startup.
+- Delete: deactivates the template (`isActive = false`) and deletes all generated transactions dated ≥ today.
+
+**`getDueOccurrences` utility** (`packages/core/src/utils/recurring-dates.ts`)
+Pure function with no side effects. Used by the service and fully tested independently. Weekly/biweekly/every4weeks anchor from `startDate` to avoid interval drift. Monthly/every6months/annually anchor from `startDate` to preserve the original calendar day (e.g. Jan 31 → Mar 31, not Mar 28 via Feb 28).
 
 ### Export / Import Service
 
@@ -307,6 +352,7 @@ packages/db/src/repositories/
   categories-repository.ts
   currencies-repository.ts
   settings-repository.ts
+  recurring-transactions-repository.ts
 ```
 
 Tests are co-located in `__tests__/` next to each repository, using in-memory SQLite.

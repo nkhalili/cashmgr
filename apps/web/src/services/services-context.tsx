@@ -8,6 +8,7 @@ import { BudgetsService } from './budgets-service';
 import { CategoriesService } from './categories-service';
 import { CurrenciesService } from './currencies-service';
 import { DashboardService } from './dashboard-service';
+import { RecurringTransactionsService } from './recurring-transactions-service';
 import { TransactionsService } from './transactions-service';
 import { createWebSqliteDatabase } from '../database/web-sqlite-database';
 
@@ -19,6 +20,7 @@ interface ServicesContextValue {
   categoriesService: CategoriesService;
   currenciesService: CurrenciesService;
   dashboardService: DashboardService;
+  recurringTransactionsService: RecurringTransactionsService;
   transactionsService: TransactionsService;
 }
 
@@ -39,6 +41,13 @@ export const ServicesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         if (!isMounted) return;
 
+        const transactionsService = new TransactionsService(adapter);
+        const recurringTransactionsService = new RecurringTransactionsService(adapter, transactionsService);
+
+        // Generate pending recurring transactions before making the app usable
+        // so the Settings > Recurring page always shows the current lastGeneratedDate.
+        await recurringTransactionsService.generateDueTransactions();
+
         setValue({
           database: db,
           adapter,
@@ -47,7 +56,8 @@ export const ServicesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           categoriesService: new CategoriesService(adapter),
           currenciesService: new CurrenciesService(adapter),
           dashboardService: new DashboardService(adapter),
-          transactionsService: new TransactionsService(adapter),
+          recurringTransactionsService,
+          transactionsService,
         });
       } catch (err) {
         // F-024: Use ErrorHandler for centralized error handling
@@ -145,6 +155,15 @@ export function useTransactionsService(): TransactionsService {
   }
 
   return ctx.transactionsService;
+}
+
+export function useRecurringTransactionsService(): RecurringTransactionsService {
+  const ctx = React.useContext(ServicesContext);
+  if (!ctx) {
+    throw new Error('ServicesProvider is missing from component tree.');
+  }
+
+  return ctx.recurringTransactionsService;
 }
 
 export function useDashboardService(): DashboardService {

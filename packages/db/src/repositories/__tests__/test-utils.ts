@@ -89,6 +89,32 @@ const ALL_TEST_SCHEMA_STATEMENTS = [
   // Migration 006: Soft-delete for budgets
   'ALTER TABLE budgets ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0;',
   'CREATE INDEX IF NOT EXISTS idx_budgets_active ON budgets(is_deleted);',
+  // Migration 008: Recurring transactions table
+  `CREATE TABLE IF NOT EXISTS recurring_transactions (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL CHECK (type IN ('income','expense','transfer')),
+    amount REAL NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    account_id TEXT NOT NULL,
+    to_account_id TEXT,
+    category_id TEXT,
+    notes TEXT,
+    frequency TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT,
+    last_generated_date TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+  );`,
+  'CREATE INDEX IF NOT EXISTS idx_recurring_active ON recurring_transactions(is_active);',
+  'CREATE INDEX IF NOT EXISTS idx_recurring_account ON recurring_transactions(account_id);',
+  // Migration 009: Link transactions to recurring templates
+  'ALTER TABLE transactions ADD COLUMN recurring_transaction_id TEXT;',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_recurring ON transactions(recurring_transaction_id);',
 ];
 
 /**

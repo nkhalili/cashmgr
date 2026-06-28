@@ -15,14 +15,12 @@ CashMgr is a local-first personal finance app. The local version is free, ad-fre
 | Dashboard | Period summary, pie charts by category |
 | Web SQLite WASM + OPFS | Replaced sql.js + IndexedDB; full-speed local SQLite in the browser |
 | Data Export / Import | Available in JSON and CSV to be used for restore or migration purposes |
+| Budgets | Monthly spending limits per expense category with green → yellow → red progress tracking |
+| Recurring Transactions | 10 frequencies (daily through annually); on-startup generation; manage via Settings |
 
 ---
 
 ## Planned
-
-### Budgets
-
-Monthly spending limits per expense category with progress tracking. Visual feedback (green → yellow → red) as the month progresses; no push notifications in v1.
 
 ### Reports & Charts
 

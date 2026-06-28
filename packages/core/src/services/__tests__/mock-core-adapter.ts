@@ -9,6 +9,7 @@ import type {
   Currency,
   Transaction,
   Budget,
+  RecurringTransaction,
   CreateBudgetInput,
   UpdateBudgetInput,
   BudgetWithProgress,
@@ -20,6 +21,8 @@ import type {
   UpdateCategoryInput,
   UpdateTransactionInput,
   UpdateCurrencyInput,
+  CreateRecurringTransactionInput,
+  UpdateRecurringTransactionInput,
   FilterParams,
   PaginationParams,
   CategoryType,
@@ -41,7 +44,9 @@ export class MockCoreAdapter implements DatabaseAdapter {
   private transactions: Transaction[] = [];
   private budgets: Budget[] = [];
   private deletedBudgetIds = new Set<string>();
+  private recurringTransactions: RecurringTransaction[] = [];
   private settings: Record<string, string> = {};
+  private idCounter = 1;
 
   seed(data: SeedData): void {
     if (data.accounts) this.accounts.push(...data.accounts);
@@ -334,6 +339,7 @@ export class MockCoreAdapter implements DatabaseAdapter {
       this.transactions = [];
       this.budgets = [];
       this.deletedBudgetIds = new Set();
+      this.recurringTransactions = [];
       this.settings = {};
     }
     const upsert = <T extends { id: string }>(arr: T[], items: T[] = []) => {
@@ -348,6 +354,7 @@ export class MockCoreAdapter implements DatabaseAdapter {
     upsert(this.currencies, data.currencies);
     upsert(this.transactions, data.transactions);
     upsert(this.budgets, data.budgets);
+    upsert(this.recurringTransactions, data.recurringTransactions);
     for (const b of data.deletedBudgets ?? []) {
       const idx = this.budgets.findIndex((x) => x.id === b.id);
       if (idx >= 0) this.budgets[idx] = b;
@@ -357,10 +364,55 @@ export class MockCoreAdapter implements DatabaseAdapter {
     Object.assign(this.settings, data.settings ?? {});
   }
 
+  // Recurring Transactions
+  async createRecurringTransaction(input: CreateRecurringTransactionInput): Promise<RecurringTransaction> {
+    const now = Date.now();
+    const rt: RecurringTransaction = {
+      id: `rt-${this.idCounter++}`,
+      type: input.type, amount: input.amount, currency: input.currency ?? 'USD',
+      accountId: input.accountId, toAccountId: input.toAccountId, categoryId: input.categoryId,
+      notes: input.notes, frequency: input.frequency, startDate: input.startDate,
+      endDate: input.endDate, lastGeneratedDate: undefined, isActive: true,
+      createdAt: now, updatedAt: now,
+    };
+    this.recurringTransactions.push(rt);
+    return rt;
+  }
+  async getRecurringTransactionById(id: string): Promise<RecurringTransaction | null> {
+    return this.recurringTransactions.find((r) => r.id === id) ?? null;
+  }
+  async getRecurringTransactions(activeOnly = false): Promise<RecurringTransaction[]> {
+    return activeOnly ? this.recurringTransactions.filter((r) => r.isActive) : [...this.recurringTransactions];
+  }
+  async updateRecurringTransaction(input: UpdateRecurringTransactionInput): Promise<RecurringTransaction> {
+    const idx = this.recurringTransactions.findIndex((r) => r.id === input.id);
+    if (idx === -1) throw new Error(`RecurringTransaction ${input.id} not found`);
+    const existing = this.recurringTransactions[idx];
+    this.recurringTransactions[idx] = {
+      ...existing,
+      ...(input.type !== undefined && { type: input.type }),
+      ...(input.amount !== undefined && { amount: input.amount }),
+      ...(input.frequency !== undefined && { frequency: input.frequency }),
+      ...(input.startDate !== undefined && { startDate: input.startDate }),
+      ...('endDate' in input && { endDate: input.endDate ?? undefined }),
+      ...(input.notes !== undefined && { notes: input.notes ?? undefined }),
+      ...(input.isActive !== undefined && { isActive: input.isActive }),
+      ...('lastGeneratedDate' in input && { lastGeneratedDate: input.lastGeneratedDate ?? undefined }),
+      updatedAt: Date.now(),
+    };
+    return this.recurringTransactions[idx];
+  }
+  async deleteRecurringTransaction(id: string): Promise<void> {
+    this.recurringTransactions = this.recurringTransactions.filter((r) => r.id !== id);
+  }
+  async getTransactionsByRecurringId(recurringId: string): Promise<Transaction[]> {
+    return this.transactions.filter((t) => t.recurringTransactionId === recurringId);
+  }
+
   // Lifecycle / migrations (stubs)
   async initialize(): Promise<void> {}
   async close(): Promise<void> {}
-  async getCurrentSchemaVersion(): Promise<number> { return 5; }
+  async getCurrentSchemaVersion(): Promise<number> { return 6; }
   async runMigrations(): Promise<void> {}
   async rollbackMigration(): Promise<void> {}
 }

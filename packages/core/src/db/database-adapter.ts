@@ -3,6 +3,7 @@ import { Account, CreateAccountInput, UpdateAccountInput } from '../models/Accou
 import { Category, CreateCategoryInput, UpdateCategoryInput } from '../models/Category';
 import { Currency, CreateCurrencyInput, UpdateCurrencyInput } from '../models/Currency';
 import { Budget, CreateBudgetInput, UpdateBudgetInput, BudgetWithProgress } from '../models/Budget';
+import { RecurringTransaction, CreateRecurringTransactionInput, UpdateRecurringTransactionInput } from '../models/RecurringTransaction';
 import { CategoryType, CategoryAggregation, FilterParams, PaginationParams } from '../types';
 
 /**
@@ -17,6 +18,7 @@ export interface BulkUpsertData {
   transactions?: Transaction[];
   budgets?: Budget[];
   deletedBudgets?: Budget[];
+  recurringTransactions?: RecurringTransaction[];
   settings?: Record<string, string>;
   clearExisting?: boolean;
 }
@@ -83,6 +85,14 @@ export interface DatabaseAdapter {
   getBudgetDefaults(month: number, year: number): Promise<{ categoryId: string; amount: number }[]>;
   updateBudget(input: UpdateBudgetInput): Promise<Budget>;
   deleteBudget(id: string): Promise<void>;
+
+  // Recurring transaction operations
+  createRecurringTransaction(input: CreateRecurringTransactionInput): Promise<RecurringTransaction>;
+  getRecurringTransactionById(id: string): Promise<RecurringTransaction | null>;
+  getRecurringTransactions(activeOnly?: boolean): Promise<RecurringTransaction[]>;
+  updateRecurringTransaction(input: UpdateRecurringTransactionInput): Promise<RecurringTransaction>;
+  deleteRecurringTransaction(id: string): Promise<void>;
+  getTransactionsByRecurringId(recurringId: string): Promise<Transaction[]>;
 
   // Migration operations (F-022)
   getCurrentSchemaVersion(): Promise<number>;

@@ -9,10 +9,14 @@ import {
   CreateTransactionInputSchema,
   DEFAULT_CURRENCY,
   getTodayDateString,
+  RecurringFrequency,
+  RECURRING_FREQUENCY_LABELS,
+  RECURRING_FREQUENCIES,
 } from '@cashmgr/core';
 import {
   useAccountsService,
   useCategoriesService,
+  useRecurringTransactionsService,
   useTransactionsService,
 } from '../services/services-context';
 import { useFormValidation } from '../hooks/useFormValidation';
@@ -33,6 +37,7 @@ export function AddTransaction() {
   const { id: transactionId } = useParams<{ id: string }>();
   const accountsService = useAccountsService();
   const categoriesService = useCategoriesService();
+  const recurringTransactionsService = useRecurringTransactionsService();
   const transactionsService = useTransactionsService();
 
   // Edit mode detection
@@ -47,6 +52,11 @@ export function AddTransaction() {
   const [categoryId, setCategoryId] = React.useState('');
   const [toAccountId, setToAccountId] = React.useState('');
   const [notes, setNotes] = React.useState('');
+
+  // Recurrence state (new transactions only)
+  const [isRecurring, setIsRecurring] = React.useState(false);
+  const [recurringFrequency, setRecurringFrequency] = React.useState<RecurringFrequency>('monthly');
+  const [recurringEndDate, setRecurringEndDate] = React.useState('');
 
   // Data state
   const [accounts, setAccounts] = React.useState<Account[]>([]);
@@ -154,6 +164,9 @@ export function AddTransaction() {
     setCategoryId('');
     setToAccountId('');
     setNotes('');
+    setIsRecurring(false);
+    setRecurringFrequency('monthly');
+    setRecurringEndDate('');
     clearErrors();
     setError(null);
     setSuccess(null);
@@ -188,8 +201,26 @@ export function AddTransaction() {
             notes: formValues.notes,
           });
           setSuccess('Transaction updated successfully!');
+        } else if (isRecurring) {
+          // Create recurring template (which will also generate the first occurrence)
+          await recurringTransactionsService.createRecurringTransaction({
+            type: formValues.type,
+            amount: formValues.amount,
+            currency: formValues.currency,
+            accountId: formValues.accountId,
+            categoryId: formValues.categoryId,
+            toAccountId: formValues.toAccountId,
+            notes: formValues.notes,
+            frequency: recurringFrequency,
+            startDate: formValues.date,
+            endDate: recurringEndDate || undefined,
+          });
+          // Immediately generate due transactions (first occurrence today)
+          await recurringTransactionsService.generateDueTransactions();
+          setSuccess('Recurring transaction created successfully!');
+          resetForm();
         } else {
-          // Create new transaction
+          // Create one-time transaction
           await transactionsService.createTransaction(formValues);
           setSuccess('Transaction created successfully!');
           resetForm();
@@ -208,7 +239,7 @@ export function AddTransaction() {
         setIsSubmitting(false);
       }
     },
-    [getFormValues, validateAll, transactionsService, isEditMode, transactionId, resetForm, navigate],
+    [getFormValues, validateAll, transactionsService, recurringTransactionsService, isEditMode, transactionId, isRecurring, recurringFrequency, recurringEndDate, resetForm, navigate],
   );
 
   // Handle type change
@@ -462,6 +493,78 @@ export function AddTransaction() {
             />
           </div>
 
+          {/* Recurrence section — only shown when creating a new transaction */}
+          {!isEditMode && (
+            <div
+              style={{
+                borderTop: `1px solid ${theme.colors.border}`,
+                paddingTop: theme.spacing.md,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: theme.spacing.md,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <span
+                    style={{
+                      fontFamily: theme.fontFamily,
+                      fontSize: theme.typography.body.fontSize,
+                      fontWeight: 500,
+                      color: theme.colors.textPrimary,
+                    }}
+                  >
+                    Make recurring
+                  </span>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontFamily: theme.fontFamily,
+                      fontSize: theme.typography.caption.fontSize,
+                      color: theme.colors.textSecondary,
+                    }}
+                  >
+                    Automatically repeat this transaction on a schedule
+                  </p>
+                </div>
+                <label
+                  style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: theme.spacing.sm }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isRecurring}
+                    onChange={(e) => setIsRecurring(e.target.checked)}
+                    style={{ width: 18, height: 18, cursor: 'pointer', accentColor: theme.colors.primary }}
+                  />
+                </label>
+              </div>
+
+              {isRecurring && (
+                <>
+                  <div>
+                    <label style={labelStyle}>Frequency</label>
+                    <select
+                      value={recurringFrequency}
+                      onChange={(e) => setRecurringFrequency(e.target.value as RecurringFrequency)}
+                      style={selectStyle}
+                    >
+                      {RECURRING_FREQUENCIES.map((freq) => (
+                        <option key={freq} value={freq}>
+                          {RECURRING_FREQUENCY_LABELS[freq]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <DateInput
+                    label="End date (optional)"
+                    value={recurringEndDate}
+                    onChange={setRecurringEndDate}
+                  />
+                </>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: theme.spacing.sm, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             {isEditMode ? (
               <Button
@@ -487,7 +590,7 @@ export function AddTransaction() {
               variant="primary"
               disabled={isSubmitting || accounts.length === 0 || (type !== 'transfer' && filteredCategories.length === 0)}
             >
-              {isSubmitting ? 'Saving...' : isEditMode ? 'Update transaction' : 'Save transaction'}
+              {isSubmitting ? 'Saving...' : isEditMode ? 'Update transaction' : isRecurring ? 'Save recurring transaction' : 'Save transaction'}
             </Button>
           </div>
         </form>
