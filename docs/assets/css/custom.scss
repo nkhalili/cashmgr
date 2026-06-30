@@ -1,0 +1,15 @@
+---
+---
+
+.site-title {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+}
+
+.site-title-logo {
+  height: 24px;
+  width: 24px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}

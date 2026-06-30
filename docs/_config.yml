@@ -1,0 +1,15 @@
+title: CashMgr
+baseurl: "/cashmgr"
+description: Personal finance app
+theme: just-the-docs
+search_enabled: true
+exclude:
+  - ARCHITECTURE.md
+  - ROADMAP.md
+  - ui-patterns.md
+
+sass:
+  silence_deprecations:
+    - import
+    - global-builtin
+    - color-functions
