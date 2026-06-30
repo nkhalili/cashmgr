@@ -1,0 +1,28 @@
+<link id="jtd-dark" rel="stylesheet" href="{{ '/assets/css/just-the-docs-dark.css' | relative_url }}" media="(prefers-color-scheme: dark)">
+<script>
+  (function () {
+    var link = document.getElementById('jtd-dark');
+    var stored = localStorage.getItem('jtd-theme');
+    if (stored === 'dark') link.media = 'all';
+    if (stored === 'light') link.media = 'not all';
+
+    function isDarkActive() {
+      return link.media === 'all' ||
+        (link.media !== 'not all' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+
+    window.updateThemeBtn = function () {
+      var cb = document.getElementById('theme-checkbox');
+      if (cb) cb.checked = isDarkActive();
+    };
+
+    window.toggleTheme = function () {
+      var dark = isDarkActive();
+      link.media = dark ? 'not all' : 'all';
+      localStorage.setItem('jtd-theme', dark ? 'light' : 'dark');
+      updateThemeBtn();
+    };
+
+    document.addEventListener('DOMContentLoaded', updateThemeBtn);
+  })();
+</script>
