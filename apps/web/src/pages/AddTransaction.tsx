@@ -360,6 +360,7 @@ export function AddTransaction() {
             onBlur={() => validateField('amount', getFormValues())}
             placeholder="0.00"
             error={errors.amount}
+            autoFocus={!isEditMode}
             helperText={
               type === 'expense'
                 ? 'Amount will be subtracted from account balance'

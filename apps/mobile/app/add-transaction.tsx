@@ -56,6 +56,7 @@ export default function AddTransactionScreen() {
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const keyboardHeight = useKeyboardHeight();
   const scrollViewRef = React.useRef<ScrollView>(null);
+  const amountInputRef = React.useRef<TextInput>(null);
 
   // Form state
   const [type, setType] = React.useState<TransactionType>('expense');
@@ -102,6 +103,13 @@ export default function AddTransactionScreen() {
     }),
     [type, amount, date, accountId, categoryId, toAccountId, notes, accounts]
   );
+
+  // Focus amount input once data finishes loading
+  React.useEffect(() => {
+    if (!isLoading) {
+      setTimeout(() => amountInputRef.current?.focus(), 100);
+    }
+  }, [isLoading]);
 
   // Load accounts and categories when tab is focused
   useFocusEffect(
@@ -363,6 +371,7 @@ export default function AddTransactionScreen() {
               Amount <Text style={styles.required}>*</Text>
             </Text>
             <TextInput
+              ref={amountInputRef}
               style={[styles.input, errors.amount && styles.inputError]}
               placeholder="0.00"
               placeholderTextColor={theme.colors.textSecondary}
