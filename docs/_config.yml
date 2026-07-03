@@ -7,6 +7,7 @@ exclude:
   - ARCHITECTURE.md
   - ROADMAP.md
   - ui-patterns.md
+  - USER_GUIDE.md
 
 sass:
   silence_deprecations:

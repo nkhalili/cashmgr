@@ -398,6 +398,7 @@ Every feature or bug fix may require doc updates. Use this table to decide what 
 | [ROADMAP.md](ROADMAP.md) | A planned feature ships (move it to Shipped) or a new one is added |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Data models, schema, key patterns, or platform-specific behaviour change |
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | User-visible behaviour changes (new screens, renamed actions, etc.) |
+| Jekyll site pages (`docs/*.md`) | Same as USER_GUIDE.md — update the corresponding page (e.g. `docs/accounts.md`) when that section's behaviour changes |
 | [docs/ui-patterns.md](docs/ui-patterns.md) | A reusable UI pattern is added or changed |
 | [docs/environment-configuration.md](docs/environment-configuration.md) | New environment variables are added or existing ones change |
 | [packages/core/README.md](packages/core/README.md) | Exported APIs, models, or utilities in `@cashmgr/core` change |
