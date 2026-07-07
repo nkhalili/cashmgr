@@ -11,6 +11,34 @@ const ACCOUNT_TYPE_OPTIONS: { label: string; value: AccountType }[] = [
   { label: 'Credit', value: 'credit' },
 ];
 
+const ACCOUNT_GROUPS: { type: AccountType; label: string }[] = [
+  { type: 'cash', label: 'Cash' },
+  { type: 'bank', label: 'Bank Accounts' },
+  { type: 'credit', label: 'Credit Cards' },
+];
+
+function getGroupTotal(accounts: Account[], currencies: Currency[]): { formatted: string; isNegative: boolean } {
+  const primary = currencies.find((c) => c.isPrimary);
+  if (!primary) {
+    const totals: Record<string, number> = {};
+    for (const account of accounts) {
+      totals[account.currency] = (totals[account.currency] ?? 0) + account.balance;
+    }
+    return {
+      formatted: Object.entries(totals)
+        .map(([currency, total]) => formatCurrency(total, currency))
+        .join(' + '),
+      isNegative: Object.values(totals).every((v) => v < 0),
+    };
+  }
+  const rateMap = new Map(currencies.map((c) => [c.id, c.exchangeRate]));
+  let total = 0;
+  for (const account of accounts) {
+    total += account.balance * (rateMap.get(account.currency) ?? 1);
+  }
+  return { formatted: formatCurrency(total, primary.id), isNegative: total < 0 };
+}
+
 export function Accounts() {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -276,35 +304,78 @@ export function Accounts() {
         </div>
       )}
 
-      <Card title="Account overview" subtitle="Organise institutions and balances" tone="default">
-        {isLoading ? (
+      {isLoading ? (
+        <Card tone="default">
           <p style={{ margin: 0, color: theme.colors.textSecondary }}>Loading accounts...</p>
-        ) : hasAccounts ? (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {accounts.map((account, index) => (
-              <ListItem
-                key={account.id}
-                title={account.name}
-                subtitle={`${account.type.charAt(0).toUpperCase()}${account.type.slice(1)} • ${account.currency}`}
-                value={formatCurrency(account.balance, account.currency)}
-                badgeLabel={account.type === 'cash' ? 'Daily' : account.type === 'bank' ? 'Recurring' : 'Credit'}
-                badgeTone={account.type === 'credit' ? 'danger' : 'accent'}
-                showDivider={index !== accounts.length - 1}
-                onPress={() => navigate(`/transactions?accountId=${account.id}`)}
-                actions={
-                  <div style={{ display: 'flex', gap: theme.spacing.xs }}>
-                    <Button type="button" variant="ghost" onClick={() => handleEdit(account)}>
-                      Edit
-                    </Button>
-                    <Button type="button" variant="ghost" onClick={() => handleDelete(account)}>
-                      Delete
-                    </Button>
-                  </div>
-                }
-              />
-            ))}
-          </div>
-        ) : (
+        </Card>
+      ) : hasAccounts ? (
+        ACCOUNT_GROUPS.map((group) => {
+          const groupAccounts = accounts.filter((a) => a.type === group.type);
+          if (groupAccounts.length === 0) return null;
+          const groupTotal = getGroupTotal(groupAccounts, currencies);
+          return (
+            <Card
+              key={group.type}
+              tone="default"
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                  marginBottom: theme.spacing.md,
+                  paddingBottom: theme.spacing.sm,
+                  borderBottom: `1px solid ${theme.colors.border}`,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: theme.typography.h3.fontSize,
+                    fontWeight: theme.typography.h3.fontWeight,
+                    color: theme.colors.textPrimary,
+                  }}
+                >
+                  {group.label}
+                </span>
+                <span
+                  style={{
+                    fontSize: theme.typography.body.fontSize,
+                    fontWeight: 600,
+                    color: groupTotal.isNegative ? theme.colors.danger : theme.colors.textPrimary,
+                  }}
+                >
+                  {groupTotal.formatted}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {groupAccounts.map((account, index) => (
+                  <ListItem
+                    key={account.id}
+                    title={account.name}
+                    subtitle={account.currency}
+                    value={formatCurrency(account.balance, account.currency)}
+                    badgeLabel={account.type === 'cash' ? 'Daily' : account.type === 'bank' ? 'Recurring' : 'Credit'}
+                    badgeTone={account.type === 'credit' ? 'danger' : 'accent'}
+                    showDivider={index !== groupAccounts.length - 1}
+                    onPress={() => navigate(`/transactions?accountId=${account.id}`)}
+                    actions={
+                      <div style={{ display: 'flex', gap: theme.spacing.xs }}>
+                        <Button type="button" variant="ghost" onClick={() => handleEdit(account)}>
+                          Edit
+                        </Button>
+                        <Button type="button" variant="ghost" onClick={() => handleDelete(account)}>
+                          Delete
+                        </Button>
+                      </div>
+                    }
+                  />
+                ))}
+              </div>
+            </Card>
+          );
+        })
+      ) : (
+        <Card tone="default">
           <EmptyState
             title="No accounts added"
             description="Accounts help you track balances, categorise inflows, and surface insights. Add one to begin, or use the template to get started quickly."
@@ -315,8 +386,8 @@ export function Accounts() {
             }
             secondaryAction={<Button type="button" variant="ghost" onClick={handleUseTemplate}>Use template</Button>}
           />
-        )}
-      </Card>
+        </Card>
+      )}
 
       {/* Add Account Modal */}
       {showAddModal && (

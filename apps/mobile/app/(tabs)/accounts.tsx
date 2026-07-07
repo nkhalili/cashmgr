@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  FlatList,
+  SectionList,
   Alert,
   TextStyle,
   ActivityIndicator,
@@ -13,19 +13,58 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Theme, useTheme } from '@cashmgr/ui';
-import { Account, AppError, formatCurrency } from '@cashmgr/core';
-import { useAccountsService } from '../../src/contexts/services-context';
+import { Account, AccountType, AppError, Currency, formatCurrency } from '@cashmgr/core';
+import { useAccountsService, useCurrenciesService } from '../../src/contexts/services-context';
+
+const ACCOUNT_GROUPS: { type: AccountType; label: string }[] = [
+  { type: 'cash', label: 'Cash' },
+  { type: 'bank', label: 'Bank Accounts' },
+  { type: 'credit', label: 'Credit Cards' },
+];
+
+function getGroupTotal(accounts: Account[], currencies: Currency[]): { formatted: string; isNegative: boolean } {
+  const primary = currencies.find((c) => c.isPrimary);
+  if (!primary) {
+    const totals: Record<string, number> = {};
+    for (const account of accounts) {
+      totals[account.currency] = (totals[account.currency] ?? 0) + account.balance;
+    }
+    return {
+      formatted: Object.entries(totals)
+        .map(([currency, total]) => formatCurrency(total, currency))
+        .join(' + '),
+      isNegative: Object.values(totals).every((v) => v < 0),
+    };
+  }
+  const rateMap = new Map(currencies.map((c) => [c.id, c.exchangeRate]));
+  let total = 0;
+  for (const account of accounts) {
+    total += account.balance * (rateMap.get(account.currency) ?? 1);
+  }
+  return { formatted: formatCurrency(total, primary.id), isNegative: total < 0 };
+}
 
 export default function AccountsScreen() {
   const theme = useTheme();
   const router = useRouter();
   const accountsService = useAccountsService();
+  const currenciesService = useCurrenciesService();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 
   const [accounts, setAccounts] = React.useState<Account[]>([]);
+  const [currencies, setCurrencies] = React.useState<Currency[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  const loadCurrencies = React.useCallback(async () => {
+    try {
+      const data = await currenciesService.listCurrencies(true);
+      setCurrencies(data);
+    } catch {
+      // Non-critical: group totals fall back to per-currency display
+    }
+  }, [currenciesService]);
 
   const loadAccounts = React.useCallback(async () => {
     setIsLoading(true);
@@ -55,13 +94,15 @@ export default function AccountsScreen() {
 
   React.useEffect(() => {
     void loadAccounts();
-  }, [loadAccounts]);
+    void loadCurrencies();
+  }, [loadAccounts, loadCurrencies]);
 
   // Refresh when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       void loadAccounts();
-    }, [loadAccounts])
+      void loadCurrencies();
+    }, [loadAccounts, loadCurrencies])
   );
 
   const handleDelete = React.useCallback(
@@ -136,6 +177,17 @@ export default function AccountsScreen() {
     }
   }, [accountsService, loadAccounts]);
 
+  const sections = React.useMemo(
+    () =>
+      ACCOUNT_GROUPS.flatMap((group) => {
+        const data = accounts.filter((a) => a.type === group.type);
+        if (data.length === 0) return [];
+        const groupTotal = getGroupTotal(data, currencies);
+        return [{ type: group.type, label: group.label, total: groupTotal.formatted, isNegative: groupTotal.isNegative, data }];
+      }),
+    [accounts, currencies]
+  );
+
   const renderAccount = ({ item }: { item: Account }) => (
     <TouchableOpacity
       style={styles.accountCard}
@@ -145,9 +197,7 @@ export default function AccountsScreen() {
     >
       <View style={styles.accountInfo}>
         <Text style={styles.accountName}>{item.name}</Text>
-        <Text style={styles.accountType}>
-          {item.type.charAt(0).toUpperCase() + item.type.slice(1)} • {item.currency}
-        </Text>
+        <Text style={styles.accountType}>{item.currency}</Text>
       </View>
       <Text style={styles.accountBalance}>{formatCurrency(item.balance, item.currency)}</Text>
       <TouchableOpacity
@@ -158,6 +208,15 @@ export default function AccountsScreen() {
         <Text style={styles.moreButtonText}>⋯</Text>
       </TouchableOpacity>
     </TouchableOpacity>
+  );
+
+  const renderSectionHeader = ({ section }: { section: { label: string; total: string; isNegative: boolean } }) => (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionHeaderLabel}>{section.label}</Text>
+      <Text style={[styles.sectionHeaderTotal, section.isNegative && styles.sectionHeaderTotalNegative]}>
+        {section.total}
+      </Text>
+    </View>
   );
 
   const renderEmpty = () => (
@@ -193,11 +252,13 @@ export default function AccountsScreen() {
           <Text style={styles.loadingText}>Loading accounts...</Text>
         </View>
       ) : accounts.length > 0 ? (
-        <FlatList
-          data={accounts}
-          renderItem={renderAccount}
+        <SectionList
+          sections={sections}
           keyExtractor={(item) => item.id}
+          renderItem={renderAccount}
+          renderSectionHeader={renderSectionHeader}
           contentContainerStyle={styles.listContent}
+          stickySectionHeadersEnabled={false}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -341,5 +402,29 @@ const createStyles = (theme: Theme) =>
       fontSize: 20,
       color: theme.colors.textSecondary,
       fontWeight: fontWeight(700),
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.xs,
+      marginBottom: theme.spacing.xs,
+      marginTop: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    sectionHeaderLabel: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: fontWeight(theme.typography.h3.fontWeight),
+      color: theme.colors.textPrimary,
+    },
+    sectionHeaderTotal: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: fontWeight(600),
+      color: theme.colors.textPrimary,
+    },
+    sectionHeaderTotalNegative: {
+      color: theme.colors.danger,
     },
   });
