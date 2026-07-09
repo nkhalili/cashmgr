@@ -281,3 +281,111 @@ const navigateYear = (direction: 'prev' | 'next') => {
 - Buttons should have `type="button"` on web
 - Use `TouchableOpacity` on mobile for proper touch feedback
 - Icons should be semantic (chevron-back/chevron-forward)
+
+---
+
+## Grouped List with Section Totals
+
+Used on the Accounts page to split a flat list into labelled sections, each showing an aggregate total. Apply this pattern whenever a list of items naturally belongs to a small number of mutually exclusive categories and a per-category aggregate is meaningful.
+
+### Layout
+
+```text
+┌─────────────────────────────────────────┐
+│  Bank Accounts              $4,200.00   │  ← section header (label + total)
+│  ─────────────────────────────────────  │
+│  Chequing          Recurring  $3,200.00 │
+│  Savings           Recurring  $1,000.00 │
+└─────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│  Credit Cards               -$350.00   │  ← total red when negative
+│  ─────────────────────────────────────  │
+│  Visa               Credit   -$350.00  │
+└─────────────────────────────────────────┘
+```
+
+- Section header: group label left-aligned, aggregate total right-aligned
+- Header separated from items by a 1px border
+- Total colour: `theme.colors.danger` when the aggregate is negative, `theme.colors.textPrimary` otherwise
+- Empty sections are hidden — do not render a header with no items
+
+### Total Calculation
+
+Totals are converted to the primary currency using stored exchange rates. If no primary currency is set (currencies not yet loaded), totals fall back to per-currency strings joined with ` + `.
+
+```typescript
+function getGroupTotal(accounts: Account[], currencies: Currency[]): { formatted: string; isNegative: boolean } {
+  const primary = currencies.find((c) => c.isPrimary);
+  if (!primary) {
+    const totals: Record<string, number> = {};
+    for (const account of accounts) {
+      totals[account.currency] = (totals[account.currency] ?? 0) + account.balance;
+    }
+    return {
+      formatted: Object.entries(totals)
+        .map(([currency, total]) => formatCurrency(total, currency))
+        .join(' + '),
+      isNegative: Object.values(totals).every((v) => v < 0),
+    };
+  }
+  const rateMap = new Map(currencies.map((c) => [c.id, c.exchangeRate]));
+  let total = 0;
+  for (const account of accounts) {
+    total += account.balance * (rateMap.get(account.currency) ?? 1);
+  }
+  return { formatted: formatCurrency(total, primary.id), isNegative: total < 0 };
+}
+```
+
+### Web Section Header
+
+```tsx
+<div
+  style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+    borderBottom: `1px solid ${theme.colors.border}`,
+  }}
+>
+  <span style={{ fontSize: theme.typography.h3.fontSize, fontWeight: theme.typography.h3.fontWeight, color: theme.colors.textPrimary }}>
+    {group.label}
+  </span>
+  <span style={{ fontSize: theme.typography.body.fontSize, fontWeight: 600, color: groupTotal.isNegative ? theme.colors.danger : theme.colors.textPrimary }}>
+    {groupTotal.formatted}
+  </span>
+</div>
+```
+
+### Mobile Section Header (SectionList)
+
+```tsx
+const renderSectionHeader = ({ section }: { section: { label: string; total: string; isNegative: boolean } }) => (
+  <View style={styles.sectionHeader}>
+    <Text style={styles.sectionHeaderLabel}>{section.label}</Text>
+    <Text style={[styles.sectionHeaderTotal, section.isNegative && styles.sectionHeaderTotalNegative]}>
+      {section.total}
+    </Text>
+  </View>
+);
+```
+
+Use `SectionList` with `stickySectionHeadersEnabled={false}` so headers scroll with the content.
+
+### Design Tokens
+
+| Element | Property | Value |
+| --- | --- | --- |
+| Header border | `borderBottom` | `1px solid theme.colors.border` |
+| Label font size | `fontSize` | `theme.typography.h3.fontSize` |
+| Label font weight | `fontWeight` | `theme.typography.h3.fontWeight` |
+| Total font size | `fontSize` | `theme.typography.body.fontSize` |
+| Total font weight | `fontWeight` | `600` |
+| Total colour (positive) | `color` | `theme.colors.textPrimary` |
+| Total colour (negative) | `color` | `theme.colors.danger` |
+
+### Usage Examples
+
+- **Accounts page**: Cash / Bank Accounts / Credit Cards
