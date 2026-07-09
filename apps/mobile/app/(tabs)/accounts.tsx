@@ -22,6 +22,34 @@ const ACCOUNT_GROUPS: { type: AccountType; label: string }[] = [
   { type: 'credit', label: 'Credit Cards' },
 ];
 
+function computeSummary(
+  accounts: Account[],
+  currencies: Currency[],
+): { assetsFormatted: string; liabilitiesFormatted: string; netFormatted: string; netIsNegative: boolean } | null {
+  if (accounts.length === 0) return null;
+  const primary = currencies.find((c) => c.isPrimary);
+  const rateMap = new Map(currencies.map((c) => [c.id, c.exchangeRate]));
+  let assets = 0;
+  let liabilities = 0;
+  for (const account of accounts) {
+    const rate = primary ? (rateMap.get(account.currency) ?? 1) : 1;
+    const converted = account.balance * rate;
+    if (converted >= 0) {
+      assets += converted;
+    } else {
+      liabilities += Math.abs(converted);
+    }
+  }
+  const net = assets - liabilities;
+  const displayCurrency = primary?.id ?? accounts[0]!.currency;
+  return {
+    assetsFormatted: formatCurrency(assets, displayCurrency),
+    liabilitiesFormatted: formatCurrency(liabilities, displayCurrency),
+    netFormatted: formatCurrency(net, displayCurrency),
+    netIsNegative: net < 0,
+  };
+}
+
 function getGroupTotal(accounts: Account[], currencies: Currency[]): { formatted: string; isNegative: boolean } {
   const primary = currencies.find((c) => c.isPrimary);
   if (!primary) {
@@ -83,14 +111,18 @@ export default function AccountsScreen() {
   const handleRefresh = React.useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const data = await accountsService.listAccounts();
-      setAccounts(data);
-    } catch (err) {
+      const [accountsData, currenciesData] = await Promise.all([
+        accountsService.listAccounts(),
+        currenciesService.listCurrencies(true),
+      ]);
+      setAccounts(accountsData);
+      setCurrencies(currenciesData);
+    } catch {
       // Silent fail on refresh - data is already loaded
     } finally {
       setIsRefreshing(false);
     }
-  }, [accountsService]);
+  }, [accountsService, currenciesService]);
 
   React.useEffect(() => {
     void loadAccounts();
@@ -177,6 +209,8 @@ export default function AccountsScreen() {
     }
   }, [accountsService, loadAccounts]);
 
+  const summary = React.useMemo(() => computeSummary(accounts, currencies), [accounts, currencies]);
+
   const sections = React.useMemo(
     () =>
       ACCOUNT_GROUPS.flatMap((group) => {
@@ -234,6 +268,28 @@ export default function AccountsScreen() {
     </View>
   );
 
+  const renderSummary = () => {
+    if (!summary) return null;
+    return (
+      <View style={styles.summaryCard}>
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>Assets</Text>
+          <Text style={styles.summaryValue}>{summary.assetsFormatted}</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>Liabilities</Text>
+          <Text style={[styles.summaryValue, styles.summaryValueDanger]}>{summary.liabilitiesFormatted}</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>Net</Text>
+          <Text style={[styles.summaryValue, summary.netIsNegative ? styles.summaryValueDanger : styles.summaryValueSuccess]}>{summary.netFormatted}</Text>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {error && (
@@ -242,31 +298,34 @@ export default function AccountsScreen() {
         </View>
       )}
 
-      <TouchableOpacity style={styles.addButton} onPress={() => router.push('/add-account')}>
-        <Text style={styles.addButtonText}>Add Account</Text>
-      </TouchableOpacity>
-
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Loading accounts...</Text>
         </View>
       ) : accounts.length > 0 ? (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item.id}
-          renderItem={renderAccount}
-          renderSectionHeader={renderSectionHeader}
-          contentContainerStyle={styles.listContent}
-          stickySectionHeadersEnabled={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={theme.colors.primary}
-            />
-          }
-        />
+        <>
+          {renderSummary()}
+          <SectionList
+            style={{ flex: 1 }}
+            sections={sections}
+            keyExtractor={(item) => item.id}
+            renderItem={renderAccount}
+            renderSectionHeader={renderSectionHeader}
+            contentContainerStyle={styles.listContent}
+            stickySectionHeadersEnabled={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                tintColor={theme.colors.primary}
+              />
+            }
+          />
+          <TouchableOpacity style={styles.addButton} onPress={() => router.push('/add-account')}>
+            <Text style={styles.addButtonText}>Add Account</Text>
+          </TouchableOpacity>
+        </>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>{renderEmpty()}</ScrollView>
       )}
@@ -291,13 +350,47 @@ const createStyles = (theme: Theme) =>
       padding: theme.spacing.lg,
       gap: theme.spacing.md,
     },
+    summaryCard: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      alignItems: 'center',
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+    },
+    summaryItem: {
+      alignItems: 'center',
+      flex: 1,
+    },
+    summaryDivider: {
+      width: 1,
+      height: 36,
+      backgroundColor: theme.colors.border,
+    },
+    summaryLabel: {
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xs,
+    },
+    summaryValue: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: fontWeight(700),
+      color: theme.colors.textPrimary,
+    },
+    summaryValueDanger: {
+      color: theme.colors.danger,
+    },
+    summaryValueSuccess: {
+      color: theme.colors.success,
+    },
     addButton: {
       backgroundColor: theme.colors.primary,
-      paddingVertical: theme.spacing.md,
-      borderRadius: theme.radii.md,
+      padding: theme.spacing.md,
+      margin: theme.spacing.md,
+      borderRadius: theme.components.interactiveRadius,
       alignItems: 'center',
-      margin: theme.spacing.lg,
-      marginBottom: theme.spacing.md,
     },
     addButtonText: {
       color: '#ffffff',

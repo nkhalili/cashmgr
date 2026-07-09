@@ -17,6 +17,34 @@ const ACCOUNT_GROUPS: { type: AccountType; label: string }[] = [
   { type: 'credit', label: 'Credit Cards' },
 ];
 
+function computeSummary(
+  accounts: Account[],
+  currencies: Currency[],
+): { assetsFormatted: string; liabilitiesFormatted: string; netFormatted: string; netIsNegative: boolean } | null {
+  if (accounts.length === 0) return null;
+  const primary = currencies.find((c) => c.isPrimary);
+  const rateMap = new Map(currencies.map((c) => [c.id, c.exchangeRate]));
+  let assets = 0;
+  let liabilities = 0;
+  for (const account of accounts) {
+    const rate = primary ? (rateMap.get(account.currency) ?? 1) : 1;
+    const converted = account.balance * rate;
+    if (converted >= 0) {
+      assets += converted;
+    } else {
+      liabilities += Math.abs(converted);
+    }
+  }
+  const net = assets - liabilities;
+  const displayCurrency = primary?.id ?? accounts[0]!.currency;
+  return {
+    assetsFormatted: formatCurrency(assets, displayCurrency),
+    liabilitiesFormatted: formatCurrency(liabilities, displayCurrency),
+    netFormatted: formatCurrency(net, displayCurrency),
+    netIsNegative: net < 0,
+  };
+}
+
 function getGroupTotal(accounts: Account[], currencies: Currency[]): { formatted: string; isNegative: boolean } {
   const primary = currencies.find((c) => c.isPrimary);
   if (!primary) {
@@ -260,6 +288,7 @@ export function Accounts() {
   );
 
   const hasAccounts = accounts.length > 0;
+  const summary = React.useMemo(() => computeSummary(accounts, currencies), [accounts, currencies]);
 
   return (
     <div
@@ -309,71 +338,93 @@ export function Accounts() {
           <p style={{ margin: 0, color: theme.colors.textSecondary }}>Loading accounts...</p>
         </Card>
       ) : hasAccounts ? (
-        ACCOUNT_GROUPS.map((group) => {
-          const groupAccounts = accounts.filter((a) => a.type === group.type);
-          if (groupAccounts.length === 0) return null;
-          const groupTotal = getGroupTotal(groupAccounts, currencies);
-          return (
-            <Card
-              key={group.type}
-              tone="default"
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'baseline',
-                  marginBottom: theme.spacing.md,
-                  paddingBottom: theme.spacing.sm,
-                  borderBottom: `1px solid ${theme.colors.border}`,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: theme.typography.h3.fontSize,
-                    fontWeight: theme.typography.h3.fontWeight,
-                    color: theme.colors.textPrimary,
-                  }}
-                >
-                  {group.label}
-                </span>
-                <span
-                  style={{
-                    fontSize: theme.typography.body.fontSize,
-                    fontWeight: 600,
-                    color: groupTotal.isNegative ? theme.colors.danger : theme.colors.textPrimary,
-                  }}
-                >
-                  {groupTotal.formatted}
-                </span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {groupAccounts.map((account, index) => (
-                  <ListItem
-                    key={account.id}
-                    title={account.name}
-                    subtitle={account.currency}
-                    value={formatCurrency(account.balance, account.currency)}
-                    badgeLabel={account.type === 'cash' ? 'Daily' : account.type === 'bank' ? 'Recurring' : 'Credit'}
-                    badgeTone={account.type === 'credit' ? 'danger' : 'accent'}
-                    showDivider={index !== groupAccounts.length - 1}
-                    onPress={() => navigate(`/transactions?accountId=${account.id}`)}
-                    actions={
-                      <div style={{ display: 'flex', gap: theme.spacing.xs }}>
-                        <Button type="button" variant="ghost" onClick={() => handleEdit(account)}>
-                          Edit
-                        </Button>
-                        <Button type="button" variant="ghost" onClick={() => handleDelete(account)}>
-                          Delete
-                        </Button>
-                      </div>
-                    }
-                  />
-                ))}
+        <>
+          {summary && (
+            <Card tone="default">
+              <div style={{ display: 'flex', justifyContent: 'space-around', gap: theme.spacing.md }}>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ margin: 0, marginBottom: theme.spacing.xs, fontSize: theme.typography.caption.fontSize, color: theme.colors.textSecondary }}>Assets</p>
+                  <p style={{ margin: 0, fontSize: theme.typography.h2.fontSize, fontWeight: theme.typography.h2.fontWeight, color: theme.colors.textPrimary }}>{summary.assetsFormatted}</p>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ margin: 0, marginBottom: theme.spacing.xs, fontSize: theme.typography.caption.fontSize, color: theme.colors.textSecondary }}>Liabilities</p>
+                  <p style={{ margin: 0, fontSize: theme.typography.h2.fontSize, fontWeight: theme.typography.h2.fontWeight, color: theme.colors.danger }}>{summary.liabilitiesFormatted}</p>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ margin: 0, marginBottom: theme.spacing.xs, fontSize: theme.typography.caption.fontSize, color: theme.colors.textSecondary }}>Net</p>
+                  <p style={{ margin: 0, fontSize: theme.typography.h2.fontSize, fontWeight: theme.typography.h2.fontWeight, color: summary.netIsNegative ? theme.colors.danger : theme.colors.success }}>{summary.netFormatted}</p>
+                </div>
               </div>
             </Card>
-          );
-        })
+          )}
+
+          {ACCOUNT_GROUPS.map((group) => {
+            const groupAccounts = accounts.filter((a) => a.type === group.type);
+            if (groupAccounts.length === 0) return null;
+            const groupTotal = getGroupTotal(groupAccounts, currencies);
+            return (
+              <Card
+                key={group.type}
+                tone="default"
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    marginBottom: theme.spacing.md,
+                    paddingBottom: theme.spacing.sm,
+                    borderBottom: `1px solid ${theme.colors.border}`,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: theme.typography.h3.fontSize,
+                      fontWeight: theme.typography.h3.fontWeight,
+                      color: theme.colors.textPrimary,
+                    }}
+                  >
+                    {group.label}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: theme.typography.body.fontSize,
+                      fontWeight: 600,
+                      color: groupTotal.isNegative ? theme.colors.danger : theme.colors.textPrimary,
+                    }}
+                  >
+                    {groupTotal.formatted}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {groupAccounts.map((account, index) => (
+                    <ListItem
+                      key={account.id}
+                      title={account.name}
+                      subtitle={account.currency}
+                      value={formatCurrency(account.balance, account.currency)}
+                      badgeLabel={account.type === 'cash' ? 'Daily' : account.type === 'bank' ? 'Recurring' : 'Credit'}
+                      badgeTone={account.type === 'credit' ? 'danger' : 'accent'}
+                      showDivider={index !== groupAccounts.length - 1}
+                      onPress={() => navigate(`/transactions?accountId=${account.id}`)}
+                      actions={
+                        <div style={{ display: 'flex', gap: theme.spacing.xs }}>
+                          <Button type="button" variant="ghost" onClick={() => handleEdit(account)}>
+                            Edit
+                          </Button>
+                          <Button type="button" variant="ghost" onClick={() => handleDelete(account)}>
+                            Delete
+                          </Button>
+                        </div>
+                      }
+                    />
+                  ))}
+                </div>
+              </Card>
+            );
+          })}
+
+        </>
       ) : (
         <Card tone="default">
           <EmptyState
