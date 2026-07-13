@@ -77,22 +77,23 @@ export function Transactions() {
     return new Map(categories.map(c => [c.id, c]));
   }, [categories]);
 
-  // Load reference data
-  React.useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [accountsData, categoriesData] = await Promise.all([
-          accountsService.listAccounts(),
-          categoriesService.listCategories(false), // Include inactive for historical transactions
-        ]);
-        setAccounts(accountsData);
-        setCategories(categoriesData);
-      } catch (err) {
-        ErrorHandler.handle(err, 'Transactions.loadReferenceData');
-      }
-    };
-    void loadData();
+  // Load reference data (accounts + categories)
+  const loadReferenceData = React.useCallback(async () => {
+    try {
+      const [accountsData, categoriesData] = await Promise.all([
+        accountsService.listAccounts(),
+        categoriesService.listCategories(false), // Include inactive for historical transactions
+      ]);
+      setAccounts(accountsData);
+      setCategories(categoriesData);
+    } catch (err) {
+      ErrorHandler.handle(err, 'Transactions.loadReferenceData');
+    }
   }, [accountsService, categoriesService]);
+
+  React.useEffect(() => {
+    void loadReferenceData();
+  }, [loadReferenceData]);
 
   // Load transactions with filters
   const loadTransactions = React.useCallback(async () => {
@@ -195,13 +196,13 @@ export function Transactions() {
 
       try {
         await transactionsService.deleteTransaction(transaction.id);
-        await loadTransactions();
+        await Promise.all([loadTransactions(), loadReferenceData()]);
       } catch (err) {
         const errorMessage = err instanceof AppError ? err.getUserMessage() : 'Failed to delete transaction';
         setError(errorMessage);
       }
     },
-    [transactionsService, loadTransactions, categoryMap],
+    [transactionsService, loadTransactions, loadReferenceData, categoryMap],
   );
 
   // Clear all filters
