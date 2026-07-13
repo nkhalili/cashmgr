@@ -413,8 +413,6 @@ export function Accounts() {
                         {formatCurrency(account.balance, account.currency)}
                       </span>
                     }
-                      badgeLabel={account.type === 'cash' ? 'Daily' : account.type === 'bank' ? 'Recurring' : 'Credit'}
-                      badgeTone={account.type === 'credit' ? 'danger' : 'accent'}
                       showDivider={index !== groupAccounts.length - 1}
                       onPress={() => navigate(`/transactions?accountId=${account.id}`)}
                       actions={

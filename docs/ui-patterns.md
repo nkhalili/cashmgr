@@ -294,13 +294,13 @@ Used on the Accounts page to split a flat list into labelled sections, each show
 ┌─────────────────────────────────────────┐
 │  Bank Accounts              $4,200.00   │  ← section header (label + total)
 │  ─────────────────────────────────────  │
-│  Chequing          Recurring  $3,200.00 │
-│  Savings           Recurring  $1,000.00 │
+│  Chequing                     $3,200.00 │
+│  Savings                      $1,000.00 │
 └─────────────────────────────────────────┘
 ┌─────────────────────────────────────────┐
 │  Credit Cards               -$350.00   │  ← total red when negative
 │  ─────────────────────────────────────  │
-│  Visa               Credit   -$350.00  │
+│  Visa                         -$350.00  │
 └─────────────────────────────────────────┘
 ```
 
