@@ -80,6 +80,7 @@ export function Accounts() {
   const [name, setName] = React.useState('');
   const [accountType, setAccountType] = React.useState<AccountType>('cash');
   const [initialBalance, setInitialBalance] = React.useState('');
+  const [owesBalance, setOwesBalance] = React.useState(false);
 
   // F-030: Currency state
   const [currencies, setCurrencies] = React.useState<Currency[]>([]);
@@ -92,12 +93,16 @@ export function Accounts() {
   const [isEditSubmitting, setIsEditSubmitting] = React.useState(false);
 
   // F-026: Helper to get current form values for validation
-  const getFormValues = React.useCallback(() => ({
-    name: name.trim(),
-    type: accountType,
-    initialBalance: initialBalance.trim() ? Number(initialBalance) : 0,
-    currency: selectedCurrency,
-  }), [name, accountType, initialBalance, selectedCurrency]);
+  const getFormValues = React.useCallback(() => {
+    const raw = initialBalance.trim() ? Math.abs(Number(initialBalance)) : 0;
+    const parsed = Number.isFinite(raw) ? raw : 0;
+    return {
+      name: name.trim(),
+      type: accountType,
+      initialBalance: accountType === 'credit' && owesBalance ? -parsed : parsed,
+      currency: selectedCurrency,
+    };
+  }, [name, accountType, initialBalance, owesBalance, selectedCurrency]);
 
   // F-026: Client-side form validation for create
   const { errors, validateField, validateAll, clearErrors, isValid } = useFormValidation(
@@ -156,6 +161,7 @@ export function Accounts() {
     setName('');
     setAccountType('cash');
     setInitialBalance('');
+    setOwesBalance(false);
     // F-030: Reset to primary currency
     const primary = currencies.find(c => c.isPrimary);
     setSelectedCurrency(primary?.id || DEFAULT_CURRENCY);
@@ -510,7 +516,11 @@ export function Accounts() {
                   </label>
                   <select
                     value={accountType}
-                    onChange={(event) => setAccountType(event.target.value as AccountType)}
+                    onChange={(event) => {
+                      const value = event.target.value as AccountType;
+                      setAccountType(value);
+                      if (value !== 'credit') setOwesBalance(false);
+                    }}
                     style={{
                       height: theme.components.inputHeight,
                       borderRadius: theme.components.interactiveRadius,
@@ -579,6 +589,38 @@ export function Accounts() {
                   onBlur={() => validateField('initialBalance', getFormValues())}
                   error={errors.initialBalance}
                 />
+                {accountType === 'credit' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.xs }}>
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: theme.spacing.sm,
+                        cursor: 'pointer',
+                        fontFamily: theme.fontFamily,
+                        fontSize: theme.typography.body.fontSize,
+                        color: theme.colors.textPrimary,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={owesBalance}
+                        onChange={(e) => setOwesBalance(e.target.checked)}
+                        style={{ width: 16, height: 16, cursor: 'pointer' }}
+                      />
+                      I currently owe this balance
+                    </label>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: theme.typography.caption.fontSize,
+                        color: theme.colors.textSecondary,
+                      }}
+                    >
+                      Enter your current balance. Check the box if it is an amount you owe — it will be recorded as a negative balance.
+                    </p>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: theme.spacing.sm }}>
                   <Button
                     type="button"
