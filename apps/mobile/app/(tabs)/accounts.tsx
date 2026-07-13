@@ -233,7 +233,7 @@ export default function AccountsScreen() {
         <Text style={styles.accountName}>{item.name}</Text>
         <Text style={styles.accountType}>{item.currency}</Text>
       </View>
-      <Text style={styles.accountBalance}>{formatCurrency(item.balance, item.currency)}</Text>
+      <Text style={[styles.accountBalance, item.balance < 0 && styles.accountBalanceNegative]}>{formatCurrency(item.balance, item.currency)}</Text>
       <TouchableOpacity
         style={styles.moreButton}
         onPress={() => handleAccountActions(item)}
@@ -447,6 +447,9 @@ const createStyles = (theme: Theme) =>
       fontSize: 18,
       fontWeight: fontWeight(600),
       color: theme.colors.textPrimary,
+    },
+    accountBalanceNegative: {
+      color: theme.colors.danger,
     },
     emptyCard: {
       backgroundColor: theme.colors.surface,

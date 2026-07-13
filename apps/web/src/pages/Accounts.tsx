@@ -402,7 +402,11 @@ export function Accounts() {
                       key={account.id}
                       title={account.name}
                       subtitle={account.currency}
-                      value={formatCurrency(account.balance, account.currency)}
+                      value={
+                      <span style={{ color: account.balance < 0 ? theme.colors.danger : theme.colors.textPrimary }}>
+                        {formatCurrency(account.balance, account.currency)}
+                      </span>
+                    }
                       badgeLabel={account.type === 'cash' ? 'Daily' : account.type === 'bank' ? 'Recurring' : 'Credit'}
                       badgeTone={account.type === 'credit' ? 'danger' : 'accent'}
                       showDivider={index !== groupAccounts.length - 1}
