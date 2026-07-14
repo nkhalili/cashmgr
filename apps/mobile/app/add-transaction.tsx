@@ -276,7 +276,6 @@ export default function AddTransactionScreen() {
         await transactionsService.createTransaction(formValues);
         setSuccess('Transaction created successfully!');
       }
-      resetForm();
 
       setTimeout(() => {
         router.replace('/transactions');

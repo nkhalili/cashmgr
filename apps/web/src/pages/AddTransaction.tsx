@@ -218,12 +218,10 @@ export function AddTransaction() {
           // Immediately generate due transactions (first occurrence today)
           await recurringTransactionsService.generateDueTransactions();
           setSuccess('Recurring transaction created successfully!');
-          resetForm();
         } else {
           // Create one-time transaction
           await transactionsService.createTransaction(formValues);
           setSuccess('Transaction created successfully!');
-          resetForm();
         }
 
         // Navigate to transactions list after short delay
