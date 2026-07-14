@@ -13,6 +13,13 @@ export const CREATE_ACCOUNTS_TABLE = `
     balance REAL NOT NULL DEFAULT 0,
     initial_balance REAL NOT NULL DEFAULT 0,
     currency TEXT NOT NULL DEFAULT 'USD',
+    statement_day INTEGER,
+    payment_day INTEGER,
+    payment_account_id TEXT,
+    auto_payment_enabled INTEGER NOT NULL DEFAULT 0,
+    auto_payment_mode TEXT,
+    auto_payment_fixed_amount REAL,
+    last_auto_payment_date TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   );

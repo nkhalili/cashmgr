@@ -44,10 +44,21 @@ All dates are stored as `YYYY-MM-DD` strings (not timestamps) to avoid timezone 
 | initialBalance | number | NO | 0 | |
 | balance | number | NO | 0 | Auto-updated by service layer |
 | currency | string | NO | USD | 3-letter ISO 4217 code |
+| statementDay | number | YES | NULL | 1–31, day of month the statement closes. Credit accounts only |
+| paymentDay | number | YES | NULL | 1–31, day of month payment is due. Credit accounts only |
+| paymentAccountId | string | YES | NULL | FK → accounts, account auto-payments are drawn from |
+| autoPaymentEnabled | boolean | NO | false | Whether auto-pay is turned on for this credit account |
+| autoPaymentMode | string | YES | NULL | `full` \| `fixed` — see "Credit Account Statement Cycle" below |
+| autoPaymentFixedAmount | number | YES | NULL | Used when `autoPaymentMode = 'fixed'` |
+| lastAutoPaymentDate | string | YES | NULL | YYYY-MM-DD, last payment due date auto-pay has processed. Internal bookkeeping, not user-editable |
 | createdAt | number | NO | — | Unix timestamp ms |
 | updatedAt | number | NO | — | Unix timestamp ms |
 
-Indexes: `idx_accounts_type` on `type`
+Indexes: `idx_accounts_type` on `type`, `idx_accounts_auto_payment` on `autoPaymentEnabled`
+
+Statement/payment fields, `paymentAccountId`, and auto-pay fields are only meaningful when `type = 'credit'`; `validateAccountBusinessRules` (`packages/core/src/validation/schemas.ts`) rejects them on non-credit accounts and clears them server-side (`AccountsService.updateAccount`, duplicated per app) when an account's type changes away from `credit`.
+
+`AccountsService.deleteAccount` (duplicated per app) blocks deletion with a `ValidationError` if any other account references the target as `paymentAccountId` — otherwise deleting a payment account would leave a credit account's auto-pay pointing at a nonexistent account.
 
 ### `transactions`
 
@@ -210,6 +221,29 @@ Edit/Delete semantics:
 
 **`getDueOccurrences` utility** (`packages/core/src/utils/recurring-dates.ts`)
 Pure function with no side effects. Used by the service and fully tested independently. Weekly/biweekly/every4weeks anchor from `startDate` to avoid interval drift. Monthly/every6months/annually anchor from `startDate` to preserve the original calendar day (e.g. Jan 31 → Mar 31, not Mar 28 via Feb 28).
+
+### Credit Account Statement Cycle & Auto-Pay
+
+Credit accounts (`type = 'credit'`) can optionally track a billing cycle — a statement day and payment day (both day-of-month, 1–31) — and auto-pay themselves from a linked account.
+
+**Balance Payable vs. Outstanding Balance** (`calculateCreditAccountSummary`, `packages/core/src/services/credit-account-utils.ts`)
+
+- **Outstanding Balance** = `max(0, -account.balance)` — the total currently owed (billed + unbilled), read directly from the live, incrementally-maintained `balance` column.
+- **Balance Payable** = the debt as of the last closed statement date, minus any payments (transfers into the account) made since. Computed by replaying `initialBalance` plus every transaction touching the account up to `lastStatementDate` (reusing `getAccountBalanceDelta` from `balance-utils.ts`, the same per-transaction math `recalculateBalances` uses), then subtracting later payments. `null` when `statementDay` isn't configured.
+- `getMostRecentDayOfMonthOnOrBefore` / `getNextDayOfMonthAfter` (same file) do the day-of-month arithmetic, clamping short months (e.g. day 31 in February → the 28th/29th).
+
+Both apps compose this with a live account/transaction fetch via `getCreditAccountSummaries` (`apps/{web,mobile}/src/services/credit-account-summary.ts`), used by the Accounts page to render the two figures per credit account (gated by the "show balance payable / outstanding balance" setting — see `credit-display-context.tsx` in each app, persisted the same way as theme preference).
+
+**Auto-Pay (`CreditAutoPaymentService.processDuePayments`, duplicated per app like `RecurringTransactionsService`)**
+There is no background scheduler in this app — auto-pay follows the exact same "catch-up on app open" pattern as recurring transactions: called once during `ServicesProvider` init, right after `recurringTransactionsService.generateDueTransactions()`. For each credit account with `autoPaymentEnabled` and all of `statementDay`/`paymentDay`/`paymentAccountId` set:
+
+1. Compute the most recent payment due date on or before today. Skip if `lastAutoPaymentDate` already covers it (bookkeeping field, mirrors `RecurringTransaction.lastGeneratedDate`).
+2. Compute Balance Payable as of that due date's preceding statement.
+3. Pay the full amount, or a fixed amount capped at what's owed, depending on `autoPaymentMode`.
+4. Create the payment via the existing `TransactionsService.createTransaction({ type: 'transfer', accountId: paymentAccountId, toAccountId: creditAccountId, notes: 'Payment', ... })` — reuses the existing transfer + balance-update logic untouched. (`Transaction` has no `description` column — see the `transactions` table above — so `notes` is the field used.)
+5. Stamp `lastAutoPaymentDate` to prevent reprocessing, even when nothing was owed.
+
+Errors are non-fatal (logged via `ErrorHandler`, loop continues), matching `generateDueTransactions`'s error handling.
 
 ### Export / Import Service
 

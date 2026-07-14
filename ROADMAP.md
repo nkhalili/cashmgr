@@ -17,6 +17,7 @@ CashMgr is a local-first personal finance app. The local version is free, ad-fre
 | Data Export / Import | Available in JSON and CSV to be used for restore or migration purposes |
 | Budgets | Monthly spending limits per expense category with green → yellow → red progress tracking |
 | Recurring Transactions | 10 frequencies (daily through annually); on-startup generation; manage via Settings |
+| Credit Card Statement & Auto-Pay | Statement/payment day, Balance Payable & Outstanding Balance on Accounts page, optional auto-pay (full or fixed amount) from a linked account |
 
 ---
 

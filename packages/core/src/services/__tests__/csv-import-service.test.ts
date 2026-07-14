@@ -18,6 +18,7 @@ function makeAdapter() {
         balance: 1000,
         initialBalance: 1000,
         currency: 'USD',
+        autoPaymentEnabled: false,
         createdAt: 1000,
         updatedAt: 1000,
       },

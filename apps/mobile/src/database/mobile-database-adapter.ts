@@ -92,14 +92,59 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
     const currency = input.currency || DEFAULT_CURRENCY;
 
     await this.db.runAsync(
-      `INSERT INTO accounts (id, name, type, balance, initial_balance, currency, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, input.name, input.type, input.initialBalance, input.initialBalance, currency, now, now]
+      `INSERT INTO accounts (
+        id, name, type, balance, initial_balance, currency,
+        statement_day, payment_day, payment_account_id,
+        auto_payment_enabled, auto_payment_mode, auto_payment_fixed_amount,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id, input.name, input.type, input.initialBalance, input.initialBalance, currency,
+        input.statementDay ?? null, input.paymentDay ?? null, input.paymentAccountId ?? null,
+        input.autoPaymentEnabled ? 1 : 0, input.autoPaymentMode ?? null, input.autoPaymentFixedAmount ?? null,
+        now, now,
+      ]
     );
 
     const account = await this.getAccountById(id);
     if (!account) throw new Error('Failed to create account');
     return account;
+  }
+
+  private mapAccountRow(row: {
+    id: string;
+    name: string;
+    type: string;
+    balance: number;
+    initial_balance: number;
+    currency: string;
+    statement_day: number | null;
+    payment_day: number | null;
+    payment_account_id: string | null;
+    auto_payment_enabled: number;
+    auto_payment_mode: string | null;
+    auto_payment_fixed_amount: number | null;
+    last_auto_payment_date: string | null;
+    created_at: number;
+    updated_at: number;
+  }): Account {
+    return {
+      id: row.id,
+      name: row.name,
+      type: row.type as Account['type'],
+      balance: row.balance,
+      initialBalance: row.initial_balance,
+      currency: row.currency,
+      statementDay: row.statement_day,
+      paymentDay: row.payment_day,
+      paymentAccountId: row.payment_account_id,
+      autoPaymentEnabled: !!row.auto_payment_enabled,
+      autoPaymentMode: row.auto_payment_mode as Account['autoPaymentMode'],
+      autoPaymentFixedAmount: row.auto_payment_fixed_amount,
+      lastAutoPaymentDate: row.last_auto_payment_date,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
   }
 
   async getAccounts(): Promise<Account[]> {
@@ -112,20 +157,18 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
       balance: number;
       initial_balance: number;
       currency: string;
+      statement_day: number | null;
+      payment_day: number | null;
+      payment_account_id: string | null;
+      auto_payment_enabled: number;
+      auto_payment_mode: string | null;
+      auto_payment_fixed_amount: number | null;
+      last_auto_payment_date: string | null;
       created_at: number;
       updated_at: number;
     }>('SELECT * FROM accounts ORDER BY created_at DESC');
 
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      type: row.type as Account['type'],
-      balance: row.balance,
-      initialBalance: row.initial_balance,
-      currency: row.currency,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    return rows.map((row) => this.mapAccountRow(row));
   }
 
   async getAccountById(id: string): Promise<Account | null> {
@@ -138,30 +181,27 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
       balance: number;
       initial_balance: number;
       currency: string;
+      statement_day: number | null;
+      payment_day: number | null;
+      payment_account_id: string | null;
+      auto_payment_enabled: number;
+      auto_payment_mode: string | null;
+      auto_payment_fixed_amount: number | null;
+      last_auto_payment_date: string | null;
       created_at: number;
       updated_at: number;
     }>('SELECT * FROM accounts WHERE id = ?', [id]);
 
     if (rows.length === 0) return null;
 
-    const row = rows[0];
-    return {
-      id: row.id,
-      name: row.name,
-      type: row.type as Account['type'],
-      balance: row.balance,
-      initialBalance: row.initial_balance,
-      currency: row.currency,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
+    return this.mapAccountRow(rows[0]);
   }
 
   async updateAccount(input: UpdateAccountInput): Promise<Account> {
     if (!this.db) throw new Error('Database not initialized');
 
     const updates: string[] = [];
-    const values: (string | number)[] = [];
+    const values: (string | number | null)[] = [];
 
     if (input.name !== undefined) {
       updates.push('name = ?');
@@ -171,9 +211,41 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
       updates.push('type = ?');
       values.push(input.type);
     }
+    if (input.currency !== undefined) {
+      updates.push('currency = ?');
+      values.push(input.currency);
+    }
     if (input.balance !== undefined) {
       updates.push('balance = ?');
       values.push(input.balance);
+    }
+    if (input.statementDay !== undefined) {
+      updates.push('statement_day = ?');
+      values.push(input.statementDay);
+    }
+    if (input.paymentDay !== undefined) {
+      updates.push('payment_day = ?');
+      values.push(input.paymentDay);
+    }
+    if (input.paymentAccountId !== undefined) {
+      updates.push('payment_account_id = ?');
+      values.push(input.paymentAccountId);
+    }
+    if (input.autoPaymentEnabled !== undefined) {
+      updates.push('auto_payment_enabled = ?');
+      values.push(input.autoPaymentEnabled ? 1 : 0);
+    }
+    if (input.autoPaymentMode !== undefined) {
+      updates.push('auto_payment_mode = ?');
+      values.push(input.autoPaymentMode);
+    }
+    if (input.autoPaymentFixedAmount !== undefined) {
+      updates.push('auto_payment_fixed_amount = ?');
+      values.push(input.autoPaymentFixedAmount);
+    }
+    if (input.lastAutoPaymentDate !== undefined) {
+      updates.push('last_auto_payment_date = ?');
+      values.push(input.lastAutoPaymentDate);
     }
 
     updates.push('updated_at = ?');
@@ -1275,11 +1347,17 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
     for (const account of data.accounts ?? []) {
       await this.db.runAsync(
         `INSERT OR REPLACE INTO accounts
-          (id, name, type, balance, initial_balance, currency, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, name, type, balance, initial_balance, currency,
+           statement_day, payment_day, payment_account_id,
+           auto_payment_enabled, auto_payment_mode, auto_payment_fixed_amount, last_auto_payment_date,
+           created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           account.id, account.name, account.type,
           account.balance, account.initialBalance, account.currency,
+          account.statementDay ?? null, account.paymentDay ?? null, account.paymentAccountId ?? null,
+          account.autoPaymentEnabled ? 1 : 0, account.autoPaymentMode ?? null,
+          account.autoPaymentFixedAmount ?? null, account.lastAutoPaymentDate ?? null,
           account.createdAt, account.updatedAt,
         ]
       );

@@ -13,8 +13,10 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Theme, useTheme } from '@cashmgr/ui';
-import { Account, AccountType, AppError, Currency, formatCurrency } from '@cashmgr/core';
-import { useAccountsService, useCurrenciesService } from '../../src/contexts/services-context';
+import { Account, AccountType, AppError, Currency, CreditAccountSummary, formatCurrency } from '@cashmgr/core';
+import { useAccountsService, useCurrenciesService, useTransactionsService } from '../../src/contexts/services-context';
+import { useShowCreditBalances } from '../../src/contexts/credit-display-context';
+import { getCreditAccountSummaries } from '../../src/services/credit-account-summary';
 
 const ACCOUNT_GROUPS: { type: AccountType; label: string }[] = [
   { type: 'cash', label: 'Cash' },
@@ -77,10 +79,13 @@ export default function AccountsScreen() {
   const router = useRouter();
   const accountsService = useAccountsService();
   const currenciesService = useCurrenciesService();
+  const transactionsService = useTransactionsService();
+  const { show: showCreditBalances } = useShowCreditBalances();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 
   const [accounts, setAccounts] = React.useState<Account[]>([]);
   const [currencies, setCurrencies] = React.useState<Currency[]>([]);
+  const [creditSummaries, setCreditSummaries] = React.useState<Map<string, CreditAccountSummary>>(new Map());
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -136,6 +141,21 @@ export default function AccountsScreen() {
       void loadCurrencies();
     }, [loadAccounts, loadCurrencies])
   );
+
+  // Load Balance Payable / Outstanding Balance for credit accounts
+  React.useEffect(() => {
+    if (!showCreditBalances) {
+      setCreditSummaries(new Map());
+      return;
+    }
+    let cancelled = false;
+    void getCreditAccountSummaries(transactionsService, accounts).then((summaries) => {
+      if (!cancelled) setCreditSummaries(summaries);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accounts, showCreditBalances, transactionsService]);
 
   const handleDelete = React.useCallback(
     async (account: Account) => {
@@ -222,27 +242,43 @@ export default function AccountsScreen() {
     [accounts, currencies]
   );
 
-  const renderAccount = ({ item }: { item: Account }) => (
-    <TouchableOpacity
-      style={styles.accountCard}
-      onPress={() => handleAccountTap(item)}
-      onLongPress={() => handleAccountActions(item)}
-      delayLongPress={500}
-    >
-      <View style={styles.accountInfo}>
-        <Text style={styles.accountName}>{item.name}</Text>
-        <Text style={styles.accountType}>{item.currency}</Text>
-      </View>
-      <Text style={[styles.accountBalance, item.balance < 0 && styles.accountBalanceNegative]}>{formatCurrency(item.balance, item.currency)}</Text>
+  const renderAccount = ({ item }: { item: Account }) => {
+    const summary = item.type === 'credit' ? creditSummaries.get(item.id) : undefined;
+    return (
       <TouchableOpacity
-        style={styles.moreButton}
-        onPress={() => handleAccountActions(item)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={styles.accountCard}
+        onPress={() => handleAccountTap(item)}
+        onLongPress={() => handleAccountActions(item)}
+        delayLongPress={500}
       >
-        <Text style={styles.moreButtonText}>⋯</Text>
+        <View style={styles.accountInfo}>
+          <Text style={styles.accountName}>{item.name}</Text>
+          <Text style={styles.accountType}>{item.currency}</Text>
+          {summary && (
+            <>
+              <Text style={styles.accountType}>
+                Outstanding: {formatCurrency(summary.outstandingBalance, item.currency)}
+              </Text>
+              {summary.balancePayable != null && (
+                <Text style={styles.accountType}>
+                  Payable{summary.nextPaymentDueDate ? ` by ${summary.nextPaymentDueDate}` : ''}:{' '}
+                  {formatCurrency(summary.balancePayable, item.currency)}
+                </Text>
+              )}
+            </>
+          )}
+        </View>
+        <Text style={[styles.accountBalance, item.balance < 0 && styles.accountBalanceNegative]}>{formatCurrency(item.balance, item.currency)}</Text>
+        <TouchableOpacity
+          style={styles.moreButton}
+          onPress={() => handleAccountActions(item)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={styles.moreButtonText}>⋯</Text>
+        </TouchableOpacity>
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   const renderSectionHeader = ({ section }: { section: { label: string; total: string; isNegative: boolean } }) => (
     <View style={styles.sectionHeader}>

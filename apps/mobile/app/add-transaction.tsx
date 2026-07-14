@@ -35,6 +35,7 @@ import {
 } from '../src/contexts/services-context';
 import { useFormValidation } from '../src/hooks/useFormValidation';
 import { DateInput } from '../src/components/DateInput';
+import { Switch } from '../src/components/Switch';
 
 const TRANSACTION_TYPES: { label: string; value: TransactionType }[] = [
   { label: 'Expense', value: 'expense' },
@@ -487,38 +488,12 @@ export default function AddTransactionScreen() {
 
           {/* Recurrence */}
           <View style={[styles.fieldContainer, { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing.md }]}>
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-              onPress={() => setIsRecurring(!isRecurring)}
-              activeOpacity={0.7}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.label, { marginBottom: 2 }]}>Make recurring</Text>
-                <Text style={{ fontSize: theme.typography.caption.fontSize, color: theme.colors.textSecondary }}>
-                  Repeat this transaction on a schedule
-                </Text>
-              </View>
-              <View
-                style={{
-                  width: 44,
-                  height: 26,
-                  borderRadius: 13,
-                  backgroundColor: isRecurring ? theme.colors.primary : theme.colors.border,
-                  justifyContent: 'center',
-                  paddingHorizontal: 3,
-                }}
-              >
-                <View
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    backgroundColor: '#fff',
-                    alignSelf: isRecurring ? 'flex-end' : 'flex-start',
-                  }}
-                />
-              </View>
-            </TouchableOpacity>
+            <Switch
+              value={isRecurring}
+              onChange={setIsRecurring}
+              label="Make recurring"
+              helperText="Repeat this transaction on a schedule"
+            />
 
             {isRecurring && (
               <View style={{ marginTop: theme.spacing.md, gap: theme.spacing.md }}>

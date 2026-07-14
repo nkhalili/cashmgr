@@ -10,8 +10,8 @@ describe('exportData', () => {
     adapter = new MockCoreAdapter();
     adapter.seed({
       accounts: [
-        { id: 'acc-1', name: 'Cash', type: 'cash', balance: 150, initialBalance: 100, currency: 'USD', createdAt: 1000, updatedAt: 2000 },
-        { id: 'acc-2', name: 'Bank', type: 'bank', balance: 500, initialBalance: 500, currency: 'USD', createdAt: 1001, updatedAt: 2001 },
+        { id: 'acc-1', name: 'Cash', type: 'cash', balance: 150, initialBalance: 100, currency: 'USD', autoPaymentEnabled: false, createdAt: 1000, updatedAt: 2000 },
+        { id: 'acc-2', name: 'Bank', type: 'bank', balance: 500, initialBalance: 500, currency: 'USD', autoPaymentEnabled: false, createdAt: 1001, updatedAt: 2001 },
       ],
       categories: [
         { id: 'cat-1', name: 'Groceries', type: 'expense', isActive: true, createdAt: 1000, updatedAt: 1000 },

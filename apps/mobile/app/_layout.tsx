@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import { useTheme } from '@cashmgr/ui';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { ThemePreferenceProvider } from '../src/contexts/theme-context';
+import { CreditDisplayProvider } from '../src/contexts/credit-display-context';
 import { ServicesProvider } from '../src/contexts/services-context';
 import { UpdateBanner } from '../src/components/UpdateBanner';
 import { useStoreUpdateCheck } from '../src/hooks/useStoreUpdateCheck';
@@ -60,9 +61,11 @@ function RootStack() {
 export default function RootLayout() {
   return (
     <ThemePreferenceProvider>
-      <ServicesProvider>
-        <RootStack />
-      </ServicesProvider>
+      <CreditDisplayProvider>
+        <ServicesProvider>
+          <RootStack />
+        </ServicesProvider>
+      </CreditDisplayProvider>
     </ThemePreferenceProvider>
   );
 }

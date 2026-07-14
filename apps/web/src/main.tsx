@@ -5,14 +5,17 @@ import './index.css';
 import { ErrorBoundary } from '@cashmgr/ui';
 import { ServicesProvider } from './services/services-context';
 import { ThemePreferenceProvider } from './contexts/theme-context';
+import { CreditDisplayProvider } from './contexts/credit-display-context';
 
 const Root: React.FC = () => {
   return (
     <ErrorBoundary>
       <ThemePreferenceProvider>
-        <ServicesProvider>
-          <App />
-        </ServicesProvider>
+        <CreditDisplayProvider>
+          <ServicesProvider>
+            <App />
+          </ServicesProvider>
+        </CreditDisplayProvider>
       </ThemePreferenceProvider>
     </ErrorBoundary>
   );

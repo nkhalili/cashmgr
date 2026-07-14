@@ -34,9 +34,10 @@ export * from './services/logger';
 export * from './services/export-service';
 export * from './services/import-service';
 export * from './services/csv-import-service';
+export * from './services/credit-account-utils';
 
 // Utilities
-export * from './utils/recurring-dates';
+export { getDueOccurrences } from './utils/recurring-dates';
 
 // API Integration (F-030)
 export * from './api/exchange-rate-api';

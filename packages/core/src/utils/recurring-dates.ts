@@ -1,11 +1,11 @@
 import type { RecurringFrequency } from '../models/RecurringTransaction';
 
-function parseDate(dateStr: string): { year: number; month: number; day: number } {
+export function parseDate(dateStr: string): { year: number; month: number; day: number } {
   const [year, month, day] = dateStr.split('-').map(Number);
   return { year, month, day };
 }
 
-function toDateString(year: number, month: number, day: number): string {
+export function toDateString(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 

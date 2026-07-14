@@ -309,6 +309,50 @@ describe('AccountsService', () => {
       expect(remaining).toHaveLength(2);
       expect(remaining.map(a => a.id)).toEqual([account1.id, account3.id]);
     });
+
+    it('should block deletion when a credit account uses it as the payment account', async () => {
+      const checking = await adapter.createAccount({
+        name: 'Checking',
+        type: 'bank',
+        initialBalance: 0,
+        currency: 'USD',
+      });
+      const credit = await adapter.createAccount({
+        name: 'Visa',
+        type: 'credit',
+        initialBalance: 0,
+        currency: 'USD',
+      });
+      await adapter.updateAccount({ id: credit.id, paymentAccountId: checking.id });
+
+      await expect(service.deleteAccount(checking.id)).rejects.toThrow(ValidationError);
+      await expect(service.deleteAccount(checking.id)).rejects.toThrow(/Visa/);
+
+      const stillThere = await adapter.getAccountById(checking.id);
+      expect(stillThere).not.toBeNull();
+    });
+
+    it('allows deletion once the referencing account no longer uses it as payment account', async () => {
+      const checking = await adapter.createAccount({
+        name: 'Checking',
+        type: 'bank',
+        initialBalance: 0,
+        currency: 'USD',
+      });
+      const credit = await adapter.createAccount({
+        name: 'Visa',
+        type: 'credit',
+        initialBalance: 0,
+        currency: 'USD',
+      });
+      await adapter.updateAccount({ id: credit.id, paymentAccountId: checking.id });
+      await adapter.updateAccount({ id: credit.id, paymentAccountId: null });
+
+      await service.deleteAccount(checking.id);
+
+      const stillThere = await adapter.getAccountById(checking.id);
+      expect(stillThere).toBeNull();
+    });
   });
 
   describe('createDefaultAccounts', () => {

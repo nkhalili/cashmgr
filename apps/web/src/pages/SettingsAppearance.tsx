@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
-import { Badge, ListItem, useTheme } from '@cashmgr/ui';
+import { Badge, ListItem, Switch, useTheme } from '@cashmgr/ui';
 import type { AccentColor } from '@cashmgr/ui';
 import { useThemePreference, ThemePreference } from '../contexts/theme-context';
+import { useShowCreditBalances } from '../contexts/credit-display-context';
 
 const THEME_OPTIONS: { value: ThemePreference; label: string; description: string }[] = [
   { value: 'system', label: 'System', description: 'Follow OS setting' },
@@ -18,6 +19,7 @@ const ACCENT_OPTIONS: { value: AccentColor; label: string; colorLight: string }[
 export function SettingsAppearance() {
   const theme = useTheme();
   const { preference, setPreference, accent, setAccent } = useThemePreference();
+  const { show: showCreditBalances, setShow: setShowCreditBalances } = useShowCreditBalances();
 
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
@@ -112,6 +114,19 @@ export function SettingsAppearance() {
             );
           })}
         </div>
+      </div>
+
+      {/* Credit account balances */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm }}>
+        <p style={{ margin: 0, fontSize: theme.typography.caption.fontSize, fontWeight: 600, color: theme.colors.textSecondary }}>
+          Accounts page
+        </p>
+        <Switch
+          value={showCreditBalances}
+          onChange={setShowCreditBalances}
+          label="Show balance payable / outstanding balance"
+          helperText="Display credit card statement and outstanding balances on the Accounts page"
+        />
       </div>
 
       {/* Compact mode placeholder */}

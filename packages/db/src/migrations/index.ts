@@ -327,6 +327,30 @@ const MIGRATION_009: Migration = {
 };
 
 /**
+ * Migration 010: Credit account statement/payment cycle and auto-payment
+ * Adds statement/payment day-of-month, linked payment account, and
+ * auto-payment configuration to accounts (credit accounts only).
+ */
+const MIGRATION_010: Migration = {
+  version: 10,
+  description: 'Add credit account statement/payment cycle and auto-payment columns',
+  up: [
+    'ALTER TABLE accounts ADD COLUMN statement_day INTEGER;',
+    'ALTER TABLE accounts ADD COLUMN payment_day INTEGER;',
+    'ALTER TABLE accounts ADD COLUMN payment_account_id TEXT;',
+    'ALTER TABLE accounts ADD COLUMN auto_payment_enabled INTEGER NOT NULL DEFAULT 0;',
+    'ALTER TABLE accounts ADD COLUMN auto_payment_mode TEXT;',
+    'ALTER TABLE accounts ADD COLUMN auto_payment_fixed_amount REAL;',
+    'ALTER TABLE accounts ADD COLUMN last_auto_payment_date TEXT;',
+    'CREATE INDEX IF NOT EXISTS idx_accounts_auto_payment ON accounts(auto_payment_enabled);',
+  ],
+  down: [
+    'DROP INDEX IF EXISTS idx_accounts_auto_payment;',
+    // SQLite < 3.35 does not support DROP COLUMN; rebuild if needed
+  ],
+};
+
+/**
  * All migrations in order
  * IMPORTANT: Never modify existing migrations!
  * Always add new migrations with incremented version numbers.
@@ -341,6 +365,7 @@ export const migrations: Migration[] = [
   MIGRATION_007,
   MIGRATION_008,
   MIGRATION_009,
+  MIGRATION_010,
   // Future migrations go here
 ];
 

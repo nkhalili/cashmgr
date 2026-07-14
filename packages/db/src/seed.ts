@@ -22,6 +22,7 @@ export const SEED_ACCOUNTS: Omit<Account, 'id' | 'createdAt' | 'updatedAt'>[] = 
     currency: 'USD',
     balance: 5420.50,
     initialBalance: 5000.00,
+    autoPaymentEnabled: false,
   },
   {
     name: 'Savings Account',
@@ -29,6 +30,7 @@ export const SEED_ACCOUNTS: Omit<Account, 'id' | 'createdAt' | 'updatedAt'>[] = 
     currency: 'USD',
     balance: 15000.00,
     initialBalance: 10000.00,
+    autoPaymentEnabled: false,
   },
   {
     name: 'Credit Card',
@@ -36,6 +38,7 @@ export const SEED_ACCOUNTS: Omit<Account, 'id' | 'createdAt' | 'updatedAt'>[] = 
     currency: 'USD',
     balance: -850.25,
     initialBalance: 0,
+    autoPaymentEnabled: false,
   },
   {
     name: 'Cash Wallet',
@@ -43,6 +46,7 @@ export const SEED_ACCOUNTS: Omit<Account, 'id' | 'createdAt' | 'updatedAt'>[] = 
     currency: 'USD',
     balance: 320.00,
     initialBalance: 500.00,
+    autoPaymentEnabled: false,
   },
 ];
 

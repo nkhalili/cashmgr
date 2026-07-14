@@ -389,3 +389,80 @@ Use `SectionList` with `stickySectionHeadersEnabled={false}` so headers scroll w
 ### Usage Examples
 
 - **Accounts page**: Cash / Bank Accounts / Credit Cards
+
+### Credit Account Sub-lines
+
+When the "show balance payable / outstanding balance" setting is on, credit-type rows show two extra lines below the currency (in the `subtitle` slot on web, as extra `Text` lines under the account name on mobile) whenever `statementDay` is configured for that account:
+
+```text
+Visa
+USD
+Outstanding: $850.25
+Payable by 2026-02-05: $600.00
+```
+
+Sourced from `calculateCreditAccountSummary` (`@cashmgr/core`) via each app's `getCreditAccountSummaries` helper (`apps/{web,mobile}/src/services/credit-account-summary.ts`). Omit the sub-lines entirely for accounts without `statementDay` set — no forced setup nagging.
+
+---
+
+## Switch (iOS-style on/off toggle)
+
+A pill-shaped on/off toggle, used for boolean settings (e.g. "Make recurring", credit account auto-payment, the "show balance payable" setting).
+
+### Switch Visual Design
+
+```text
+Label                    ( ⚪────)   off: track = theme.colors.border
+Helper text               (────⚪ )   on:  track = theme.colors.primary
+```
+
+- Track: 44×26px, fully rounded (`borderRadius: 13`)
+- Thumb: 20×20px circle, white, 3px inset from the track edge, slides to the far side based on state
+- Label + helper text (optional) sit to the left, track to the right, row spread with `justify-content: space-between`
+
+### Switch Design Tokens
+
+| Element | Property | Value |
+| --- | --- | --- |
+| Track width / height | — | 44px / 26px |
+| Track border radius | `borderRadius` | 13px (half of height) |
+| Track color (on) | `backgroundColor` | `theme.colors.primary` |
+| Track color (off) | `backgroundColor` | `theme.colors.border` |
+| Thumb size | — | 20×20px |
+| Thumb color | `backgroundColor` | `#fff` |
+| Label font size | `fontSize` | `theme.typography.body.fontSize` |
+| Helper text font size | `fontSize` | `theme.typography.caption.fontSize` |
+
+### Switch Usage
+
+```tsx
+// Web — from @cashmgr/ui
+import { Switch } from '@cashmgr/ui';
+
+<Switch
+  value={autoPaymentEnabled}
+  onChange={setAutoPaymentEnabled}
+  label="Auto payment"
+  helperText="Automatically pay from the payment account on the due date"
+/>
+```
+
+```tsx
+// Mobile — apps/mobile/src/components/Switch.tsx
+import { Switch } from '../src/components/Switch';
+
+<Switch
+  value={autoPaymentEnabled}
+  onChange={setAutoPaymentEnabled}
+  label="Auto payment"
+  helperText="Automatically pay from the payment account on the due date"
+/>
+```
+
+Omit `label`/`helperText` to render just the bare track (e.g. inline in a row you've already labelled yourself).
+
+### Switch Usage Examples
+
+- **Add/Edit Transaction**: "Make recurring"
+- **Add/Edit Account**: "Auto payment" (credit accounts)
+- **Settings › Appearance**: "Show balance payable / outstanding balance"
