@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, EmptyState, Input, ListItem, Switch, useTheme, Theme } from '@cashmgr/ui';
-import { Account, AccountType, AppError, ErrorHandler, CreateAccountInputSchema, DEFAULT_CURRENCY, formatCurrency, Currency, CreditAccountSummary } from '@cashmgr/core';
+import { Account, AccountType, AppError, ErrorHandler, CreateAccountInputSchema, DEFAULT_CURRENCY, formatCurrency, Currency, CreditAccountSummary, ACCOUNT_TYPE_GROUPS as ACCOUNT_GROUPS } from '@cashmgr/core';
 import { useAccountsService, useCurrenciesService, useTransactionsService } from '../services/services-context';
 import { useFormValidation } from '../hooks/useFormValidation';
 import { useShowCreditBalances } from '../contexts/credit-display-context';
@@ -11,12 +11,6 @@ const ACCOUNT_TYPE_OPTIONS: { label: string; value: AccountType }[] = [
   { label: 'Cash on hand', value: 'cash' },
   { label: 'Bank', value: 'bank' },
   { label: 'Credit', value: 'credit' },
-];
-
-const ACCOUNT_GROUPS: { type: AccountType; label: string }[] = [
-  { type: 'cash', label: 'Cash' },
-  { type: 'bank', label: 'Bank Accounts' },
-  { type: 'credit', label: 'Credit Cards' },
 ];
 
 const DAY_OF_MONTH_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);

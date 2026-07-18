@@ -22,6 +22,7 @@ import {
   CreateTransactionInputSchema,
   DEFAULT_CURRENCY,
   getTodayDateString,
+  ACCOUNT_TYPE_GROUPS,
 } from '@cashmgr/core';
 import {
   useAccountsService,
@@ -173,6 +174,18 @@ export default function EditTransactionScreen() {
   const destinationAccounts = React.useMemo(() => {
     return accounts.filter((a) => a.id !== accountId);
   }, [accounts, accountId]);
+
+  // Group accounts by type (Cash / Bank Accounts / Credit Cards) for the account pickers
+  const groupAccounts = React.useCallback((list: Account[]) => {
+    return ACCOUNT_TYPE_GROUPS
+      .map((group) => ({ ...group, accounts: list.filter((a) => a.type === group.type) }))
+      .filter((group) => group.accounts.length > 0);
+  }, []);
+  const accountGroups = React.useMemo(() => groupAccounts(accounts), [accounts, groupAccounts]);
+  const destinationAccountGroups = React.useMemo(
+    () => groupAccounts(destinationAccounts),
+    [destinationAccounts, groupAccounts]
+  );
 
   // Reset destination account when source account changes
   React.useEffect(() => {
@@ -469,17 +482,22 @@ export default function EditTransactionScreen() {
             </Pressable>
           </View>
           <ScrollView style={styles.modalContent}>
-            {accounts.map((account) => (
-              <Pressable
-                key={account.id}
-                style={styles.modalOption}
-                onPress={() => handleSelectAccount(account.id)}
-              >
-                <Text style={styles.modalOptionText}>
-                  {account.name} ({account.currency})
-                </Text>
-                {accountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
-              </Pressable>
+            {accountGroups.map((group) => (
+              <React.Fragment key={group.type}>
+                <Text style={styles.modalSectionHeader}>{group.label}</Text>
+                {group.accounts.map((account) => (
+                  <Pressable
+                    key={account.id}
+                    style={styles.modalOption}
+                    onPress={() => handleSelectAccount(account.id)}
+                  >
+                    <Text style={styles.modalOptionText}>
+                      {account.name} ({account.currency})
+                    </Text>
+                    {accountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
+                  </Pressable>
+                ))}
+              </React.Fragment>
             ))}
           </ScrollView>
         </View>
@@ -500,17 +518,22 @@ export default function EditTransactionScreen() {
             </Pressable>
           </View>
           <ScrollView style={styles.modalContent}>
-            {destinationAccounts.map((account) => (
-              <Pressable
-                key={account.id}
-                style={styles.modalOption}
-                onPress={() => handleSelectToAccount(account.id)}
-              >
-                <Text style={styles.modalOptionText}>
-                  {account.name} ({account.currency})
-                </Text>
-                {toAccountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
-              </Pressable>
+            {destinationAccountGroups.map((group) => (
+              <React.Fragment key={group.type}>
+                <Text style={styles.modalSectionHeader}>{group.label}</Text>
+                {group.accounts.map((account) => (
+                  <Pressable
+                    key={account.id}
+                    style={styles.modalOption}
+                    onPress={() => handleSelectToAccount(account.id)}
+                  >
+                    <Text style={styles.modalOptionText}>
+                      {account.name} ({account.currency})
+                    </Text>
+                    {toAccountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
+                  </Pressable>
+                ))}
+              </React.Fragment>
             ))}
           </ScrollView>
         </View>
@@ -775,5 +798,14 @@ const createStyles = (theme: Theme) =>
       fontSize: 18,
       color: theme.colors.primary,
       fontWeight: fontWeight(600),
+    },
+    modalSectionHeader: {
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: fontWeight(600),
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.md,
+      paddingBottom: theme.spacing.xs,
     },
   });

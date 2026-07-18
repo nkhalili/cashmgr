@@ -12,6 +12,7 @@ import {
   RecurringFrequency,
   RECURRING_FREQUENCY_LABELS,
   RECURRING_FREQUENCIES,
+  ACCOUNT_TYPE_GROUPS,
 } from '@cashmgr/core';
 import {
   useAccountsService,
@@ -148,6 +149,18 @@ export function AddTransaction() {
   const destinationAccounts = React.useMemo(() => {
     return accounts.filter(a => a.id !== accountId);
   }, [accounts, accountId]);
+
+  // Group accounts by type (Cash / Bank Accounts / Credit Cards) for the account pickers
+  const groupAccounts = React.useCallback((list: Account[]) => {
+    return ACCOUNT_TYPE_GROUPS
+      .map((group) => ({ ...group, accounts: list.filter((a) => a.type === group.type) }))
+      .filter((group) => group.accounts.length > 0);
+  }, []);
+  const accountGroups = React.useMemo(() => groupAccounts(accounts), [accounts, groupAccounts]);
+  const destinationAccountGroups = React.useMemo(
+    () => groupAccounts(destinationAccounts),
+    [destinationAccounts, groupAccounts]
+  );
 
   // Reset destination account when source account changes
   React.useEffect(() => {
@@ -390,10 +403,14 @@ export function AddTransaction() {
               required
             >
               <option value="">Select account...</option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name} ({account.currency})
-                </option>
+              {accountGroups.map((group) => (
+                <optgroup key={group.type} label={group.label}>
+                  {group.accounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name} ({account.currency})
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             {errors.accountId && (
@@ -416,10 +433,14 @@ export function AddTransaction() {
                 required
               >
                 <option value="">Select destination account...</option>
-                {destinationAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name} ({account.currency})
-                  </option>
+                {destinationAccountGroups.map((group) => (
+                  <optgroup key={group.type} label={group.label}>
+                    {group.accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name} ({account.currency})
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               {errors.toAccountId && (

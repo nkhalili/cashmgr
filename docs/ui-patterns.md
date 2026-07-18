@@ -405,6 +405,61 @@ Sourced from `calculateCreditAccountSummary` (`@cashmgr/core`) via each app's `g
 
 ---
 
+## Grouped Account Picker (no totals)
+
+Used wherever an account is *chosen* rather than browsed — the Account/From Account/To Account fields on Add/Edit Transaction and the recurring transaction editor. Same three-group split as the pattern above (Cash / Bank Accounts / Credit Cards) but without per-group totals, since the goal here is fast recognition, not a balance summary.
+
+Group accounts with the shared `ACCOUNT_TYPE_GROUPS` constant from `@cashmgr/core` (`packages/core/src/models/Account.ts`) — do not redefine the group list locally:
+
+```typescript
+const groupAccounts = (list: Account[]) =>
+  ACCOUNT_TYPE_GROUPS
+    .map((group) => ({ ...group, accounts: list.filter((a) => a.type === group.type) }))
+    .filter((group) => group.accounts.length > 0);
+```
+
+Empty groups are hidden, same as the Accounts page — e.g. the "To Account" list in a transfer omits a group entirely if its only account is the selected source account.
+
+### Web (`<optgroup>`)
+
+```tsx
+<select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+  <option value="">Select account...</option>
+  {accountGroups.map((group) => (
+    <optgroup key={group.type} label={group.label}>
+      {group.accounts.map((account) => (
+        <option key={account.id} value={account.id}>{account.name} ({account.currency})</option>
+      ))}
+    </optgroup>
+  ))}
+</select>
+```
+
+### Mobile (section header `Text` inside the picker `Modal`)
+
+```tsx
+{accountGroups.map((group) => (
+  <React.Fragment key={group.type}>
+    <Text style={styles.modalSectionHeader}>{group.label}</Text>
+    {group.accounts.map((account) => (
+      <Pressable key={account.id} style={styles.modalOption} onPress={() => handleSelectAccount(account.id)}>
+        <Text style={styles.modalOptionText}>{account.name} ({account.currency})</Text>
+        {accountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
+      </Pressable>
+    ))}
+  </React.Fragment>
+))}
+```
+
+`modalSectionHeader` style: `theme.typography.caption.fontSize`, `fontWeight: 600`, `theme.colors.textSecondary`, uppercase, `theme.spacing.lg` horizontal padding.
+
+### Account Picker Usage Examples
+
+- **Add/Edit Transaction**: Account, From Account, To Account
+- **Recurring Transaction editor**: Account, From Account, To Account
+
+---
+
 ## Switch (iOS-style on/off toggle)
 
 A pill-shaped on/off toggle, used for boolean settings (e.g. "Make recurring", credit account auto-payment, the "show balance payable" setting).

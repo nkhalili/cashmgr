@@ -13,16 +13,10 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Theme, useTheme } from '@cashmgr/ui';
-import { Account, AccountType, AppError, Currency, CreditAccountSummary, formatCurrency } from '@cashmgr/core';
+import { Account, AppError, Currency, CreditAccountSummary, formatCurrency, ACCOUNT_TYPE_GROUPS as ACCOUNT_GROUPS } from '@cashmgr/core';
 import { useAccountsService, useCurrenciesService, useTransactionsService } from '../../src/contexts/services-context';
 import { useShowCreditBalances } from '../../src/contexts/credit-display-context';
 import { getCreditAccountSummaries } from '../../src/services/credit-account-summary';
-
-const ACCOUNT_GROUPS: { type: AccountType; label: string }[] = [
-  { type: 'cash', label: 'Cash' },
-  { type: 'bank', label: 'Bank Accounts' },
-  { type: 'credit', label: 'Credit Cards' },
-];
 
 function computeSummary(
   accounts: Account[],

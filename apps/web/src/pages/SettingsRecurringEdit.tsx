@@ -9,6 +9,7 @@ import {
   RecurringFrequency,
   RECURRING_FREQUENCY_LABELS,
   RECURRING_FREQUENCIES,
+  ACCOUNT_TYPE_GROUPS,
 } from '@cashmgr/core';
 import {
   useRecurringTransactionsService,
@@ -51,6 +52,17 @@ export function SettingsRecurringEdit() {
   const destinationAccounts = React.useMemo(() =>
     accounts.filter(a => a.id !== accountId),
     [accounts, accountId]
+  );
+
+  const groupAccounts = React.useCallback((list: Account[]) => {
+    return ACCOUNT_TYPE_GROUPS
+      .map((group) => ({ ...group, accounts: list.filter((a) => a.type === group.type) }))
+      .filter((group) => group.accounts.length > 0);
+  }, []);
+  const accountGroups = React.useMemo(() => groupAccounts(accounts), [accounts, groupAccounts]);
+  const destinationAccountGroups = React.useMemo(
+    () => groupAccounts(destinationAccounts),
+    [destinationAccounts, groupAccounts]
   );
 
   React.useEffect(() => {
@@ -239,8 +251,12 @@ export function SettingsRecurringEdit() {
                 required
               >
                 <option value="">Select account...</option>
-                {accounts.map(a => (
-                  <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>
+                {accountGroups.map((group) => (
+                  <optgroup key={group.type} label={group.label}>
+                    {group.accounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </div>
@@ -255,8 +271,12 @@ export function SettingsRecurringEdit() {
                   required
                 >
                   <option value="">Select destination account...</option>
-                  {destinationAccounts.map(a => (
-                    <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>
+                  {destinationAccountGroups.map((group) => (
+                    <optgroup key={group.type} label={group.label}>
+                      {group.accounts.map(a => (
+                        <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>

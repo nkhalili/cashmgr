@@ -21,6 +21,7 @@ import {
   RecurringFrequency,
   RECURRING_FREQUENCY_LABELS,
   RECURRING_FREQUENCIES,
+  ACCOUNT_TYPE_GROUPS,
 } from '@cashmgr/core';
 import {
   useRecurringTransactionsService,
@@ -80,6 +81,17 @@ export default function SettingsRecurringEditScreen() {
   const destinationAccounts = React.useMemo(() =>
     accounts.filter(a => a.id !== accountId),
     [accounts, accountId]
+  );
+
+  const groupAccounts = React.useCallback((list: Account[]) => {
+    return ACCOUNT_TYPE_GROUPS
+      .map((group) => ({ ...group, accounts: list.filter((a) => a.type === group.type) }))
+      .filter((group) => group.accounts.length > 0);
+  }, []);
+  const accountGroups = React.useMemo(() => groupAccounts(accounts), [accounts, groupAccounts]);
+  const destinationAccountGroups = React.useMemo(
+    () => groupAccounts(destinationAccounts),
+    [destinationAccounts, groupAccounts]
   );
 
   const getAccountLabel = () => {
@@ -313,15 +325,20 @@ export default function SettingsRecurringEditScreen() {
             </Pressable>
           </View>
           <ScrollView>
-            {accounts.map((account) => (
-              <Pressable
-                key={account.id}
-                style={styles.modalOption}
-                onPress={() => { setAccountId(account.id); setActiveModal(null); }}
-              >
-                <Text style={styles.modalOptionText}>{account.name} ({account.currency})</Text>
-                {accountId === account.id && <Text style={styles.check}>✓</Text>}
-              </Pressable>
+            {accountGroups.map((group) => (
+              <React.Fragment key={group.type}>
+                <Text style={styles.modalSectionHeader}>{group.label}</Text>
+                {group.accounts.map((account) => (
+                  <Pressable
+                    key={account.id}
+                    style={styles.modalOption}
+                    onPress={() => { setAccountId(account.id); setActiveModal(null); }}
+                  >
+                    <Text style={styles.modalOptionText}>{account.name} ({account.currency})</Text>
+                    {accountId === account.id && <Text style={styles.check}>✓</Text>}
+                  </Pressable>
+                ))}
+              </React.Fragment>
             ))}
           </ScrollView>
         </View>
@@ -341,15 +358,20 @@ export default function SettingsRecurringEditScreen() {
             </Pressable>
           </View>
           <ScrollView>
-            {destinationAccounts.map((account) => (
-              <Pressable
-                key={account.id}
-                style={styles.modalOption}
-                onPress={() => { setToAccountId(account.id); setActiveModal(null); }}
-              >
-                <Text style={styles.modalOptionText}>{account.name} ({account.currency})</Text>
-                {toAccountId === account.id && <Text style={styles.check}>✓</Text>}
-              </Pressable>
+            {destinationAccountGroups.map((group) => (
+              <React.Fragment key={group.type}>
+                <Text style={styles.modalSectionHeader}>{group.label}</Text>
+                {group.accounts.map((account) => (
+                  <Pressable
+                    key={account.id}
+                    style={styles.modalOption}
+                    onPress={() => { setToAccountId(account.id); setActiveModal(null); }}
+                  >
+                    <Text style={styles.modalOptionText}>{account.name} ({account.currency})</Text>
+                    {toAccountId === account.id && <Text style={styles.check}>✓</Text>}
+                  </Pressable>
+                ))}
+              </React.Fragment>
             ))}
           </ScrollView>
         </View>
@@ -505,6 +527,15 @@ const createStyles = (theme: Theme) =>
     },
     modalOptionText: { fontSize: theme.typography.body.fontSize, color: theme.colors.textPrimary },
     modalOptionIndented: { paddingLeft: theme.spacing.xl },
+    modalSectionHeader: {
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: fontWeight(600),
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.md,
+      paddingBottom: theme.spacing.xs,
+    },
     check: { fontSize: 18, color: theme.colors.primary, fontWeight: fontWeight(600) },
     typeReadOnly: {
       height: 48, borderWidth: 1, borderColor: theme.colors.border,

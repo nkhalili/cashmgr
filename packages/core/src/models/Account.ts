@@ -28,6 +28,16 @@ export interface Account extends BaseEntity {
 }
 
 /**
+ * Display order and group labels for account types, used to group accounts
+ * (e.g. in the Accounts page and account pickers) consistently across apps.
+ */
+export const ACCOUNT_TYPE_GROUPS: { type: AccountType; label: string }[] = [
+  { type: 'cash', label: 'Cash' },
+  { type: 'bank', label: 'Bank Accounts' },
+  { type: 'credit', label: 'Credit Cards' },
+];
+
+/**
  * Create Account Input
  * F-023: Type inferred from Zod schema for type safety
  */
