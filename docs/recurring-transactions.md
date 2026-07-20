@@ -10,7 +10,11 @@ Recurring transactions let you schedule a transaction to repeat automatically on
 
 ## Setting Up a Recurring Transaction
 
-When adding a transaction, enable the **Make this recurring** toggle (below the Notes field). Choose a frequency and optionally set an end date.
+When adding a transaction, enable the **Make recurring** toggle (below the Notes field). Choose a frequency and optionally set an end date.
+
+Forgot to mark a transaction as recurring? Open it from **Transactions → Edit** and enable the same toggle there. The transaction you're editing becomes the start of the new series — no duplicate is created for its date, and any occurrences due between then and today are generated automatically the next time you open the app.
+
+If you're editing a transaction that's already part of a recurring series, the toggle is replaced with the series' **Frequency** and **End date** fields, pre-filled from the template. Changing them updates the series (same as editing from Settings → Recurring Transactions) and applies to future occurrences only.
 
 Supported frequencies:
 

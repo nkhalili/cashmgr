@@ -38,7 +38,7 @@ When recording a transfer:
 
 ## Editing a Transaction
 
-Tap any transaction to open it for editing. All fields can be changed. Balances are recalculated automatically — the old effect is reversed and the new one applied.
+Tap any transaction to open it for editing. All fields can be changed. Balances are recalculated automatically — the old effect is reversed and the new one applied. You can also turn on recurring here, or adjust an existing series' frequency/end date — see [Recurring Transactions](recurring-transactions.md).
 
 ## Deleting a Transaction
 

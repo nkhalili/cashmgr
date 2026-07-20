@@ -403,6 +403,24 @@ Payable by 2026-02-05: $600.00
 
 Sourced from `calculateCreditAccountSummary` (`@cashmgr/core`) via each app's `getCreditAccountSummaries` helper (`apps/{web,mobile}/src/services/credit-account-summary.ts`). Omit the sub-lines entirely for accounts without `statementDay` set — no forced setup nagging.
 
+### Inline Status Emoji (Transaction Rows)
+
+Transaction rows don't have a separate leading-icon element — the category's own emoji (`Category.icon`) is already inlined directly into the title text (`` `${category.icon} ${category.name}` ``). Boolean per-transaction flags follow the same convention: prepend a single emoji + space to the title string rather than adding a new visual element.
+
+Example — **recurring indicator**: transactions generated from a recurring template (`transaction.recurringTransactionId` set) get a 🔁 prefix:
+
+```tsx
+// web: Transactions.tsx — title prop
+title={`${transaction.recurringTransactionId ? '🔁 ' : ''}${categoryTitle}`}
+
+// mobile: transactions.tsx / account-transactions.tsx — displayTitle
+if (transaction.recurringTransactionId) {
+  displayTitle = `🔁 ${displayTitle}`;
+}
+```
+
+Only the auto-generated occurrences carry `recurringTransactionId` — the transaction that originally started a series (whether created directly as recurring, or turned recurring via Edit Transaction) is not retroactively flagged. See [Recurring Transactions](recurring-transactions.md).
+
 ---
 
 ## Grouped Account Picker (no totals)

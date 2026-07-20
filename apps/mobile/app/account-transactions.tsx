@@ -558,6 +558,9 @@ export default function AccountTransactionsScreen() {
         ? (category.icon ? `${category.icon} ${category.name}` : category.name)
         : 'Uncategorized';
     }
+    if (transaction.recurringTransactionId) {
+      displayTitle = `🔁 ${displayTitle}`;
+    }
 
     const getSubtitle = () => {
       const parts: string[] = [];

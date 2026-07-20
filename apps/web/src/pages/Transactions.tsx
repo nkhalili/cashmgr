@@ -627,7 +627,7 @@ export function Transactions() {
                 {group.transactions.map((transaction, txIndex) => (
                   <ListItem
                     key={transaction.id}
-                    title={transaction.type === 'transfer' ? 'Transfer' : (categoryMap.get(transaction.categoryId || '')?.name || 'Uncategorized')}
+                    title={`${transaction.recurringTransactionId ? '🔁 ' : ''}${transaction.type === 'transfer' ? 'Transfer' : (categoryMap.get(transaction.categoryId || '')?.name || 'Uncategorized')}`}
                     subtitle={`${getTransactionSubtitle(transaction)}${transaction.notes ? ` • ${transaction.notes}` : ''}`}
                     value={
                       <span

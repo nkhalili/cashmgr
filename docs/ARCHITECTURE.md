@@ -222,6 +222,12 @@ Edit/Delete semantics:
 **`getDueOccurrences` utility** (`packages/core/src/utils/recurring-dates.ts`)
 Pure function with no side effects. Used by the service and fully tested independently. Weekly/biweekly/every4weeks anchor from `startDate` to avoid interval drift. Monthly/every6months/annually anchor from `startDate` to preserve the original calendar day (e.g. Jan 31 → Mar 31, not Mar 28 via Feb 28).
 
+**Enabling recurring from Edit Transaction**
+The Add Transaction screen has always supported creating a transaction as recurring. Edit Transaction (both apps) now supports two additional cases, both driven by whether `transaction.recurringTransactionId` is set:
+
+- *Not yet recurring*: the same "Make recurring" toggle + frequency/end-date fields as Add Transaction. Saving calls `RecurringTransactionsService.createRecurringTransactionFromExisting(input, anchorDate)`, which creates the template with `startDate = anchorDate` (the transaction's own date) and immediately backfills `lastGeneratedDate = anchorDate` before the caller runs `generateDueTransactions()`. This makes the edited transaction the series' de facto first occurrence without retroactively linking it (`recurringTransactionId` on that transaction is left unset — `UpdateTransactionInput` doesn't support setting it), while still backfilling any gap occurrences between the anchor date and today.
+- *Already recurring*: frequency/end date are pre-filled from the linked template (fetched via `getRecurringTransactionById`) and shown without the toggle. Saving a change calls the existing `updateRecurringTransaction`, so the edit/regenerate semantics above apply unchanged.
+
 ### Credit Account Statement Cycle & Auto-Pay
 
 Credit accounts (`type = 'credit'`) can optionally track a billing cycle — a statement day and payment day (both day-of-month, 1–31) — and auto-pay themselves from a linked account.

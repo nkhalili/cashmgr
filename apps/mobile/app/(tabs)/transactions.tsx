@@ -382,8 +382,11 @@ export default function TransactionsScreen() {
     } else {
       const category = categoryMap.get(transaction.categoryId || '');
       displayTitle = category
-        ? (category.icon ? `${category.icon} ${category.name}` : category.name)
+        ? category.name
         : 'Uncategorized';
+    }
+    if (transaction.recurringTransactionId) {
+      displayTitle = `🔁 ${displayTitle}`;
     }
 
     return (
