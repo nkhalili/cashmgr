@@ -9,14 +9,15 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { Stack, useRouter, useFocusEffect } from 'expo-router';
+import { Stack, useFocusEffect } from 'expo-router';
 import { Theme, useTheme } from '@cashmgr/ui';
 import { Currency, AppError } from '@cashmgr/core';
 import { useCurrenciesService } from '../src/contexts/services-context';
+import { useSafeRouter } from '../src/hooks/useSafeRouter';
 
 export default function SettingsCurrenciesScreen() {
   const theme = useTheme();
-  const router = useRouter();
+  const router = useSafeRouter();
   const currenciesService = useCurrenciesService();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 

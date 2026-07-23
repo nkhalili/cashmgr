@@ -11,8 +11,9 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { Theme, useTheme } from '@cashmgr/ui';
+import { useSafeRouter } from '../../src/hooks/useSafeRouter';
 import { Account, AppError, Currency, CreditAccountSummary, formatCurrency, ACCOUNT_TYPE_GROUPS as ACCOUNT_GROUPS } from '@cashmgr/core';
 import { useAccountsService, useCurrenciesService, useTransactionsService } from '../../src/contexts/services-context';
 import { useShowCreditBalances } from '../../src/contexts/credit-display-context';
@@ -70,7 +71,7 @@ function getGroupTotal(accounts: Account[], currencies: Currency[]): { formatted
 
 export default function AccountsScreen() {
   const theme = useTheme();
-  const router = useRouter();
+  const router = useSafeRouter();
   const accountsService = useAccountsService();
   const currenciesService = useCurrenciesService();
   const transactionsService = useTransactionsService();

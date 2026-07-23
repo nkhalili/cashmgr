@@ -9,8 +9,9 @@ import {
   StyleSheet,
   TextStyle,
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeRouter } from '../src/hooks/useSafeRouter';
 import { Theme, useTheme } from '@cashmgr/ui';
 import {
   Account,
@@ -33,7 +34,7 @@ const TYPE_ICON: Record<string, string> = { income: '↑', expense: '↓', trans
 
 export default function SettingsRecurringScreen() {
   const theme = useTheme();
-  const router = useRouter();
+  const router = useSafeRouter();
   const recurringService = useRecurringTransactionsService();
   const accountsService = useAccountsService();
   const categoriesService = useCategoriesService();

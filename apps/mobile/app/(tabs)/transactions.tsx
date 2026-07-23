@@ -12,8 +12,9 @@ import {
   TextInput,
   ScrollView,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeRouter } from '../../src/hooks/useSafeRouter';
 import { Theme, useTheme } from '@cashmgr/ui';
 import {
   Account,
@@ -98,7 +99,7 @@ type ModalType = 'type' | 'account' | 'category' | 'dateRange' | null;
 
 export default function TransactionsScreen() {
   const theme = useTheme();
-  const router = useRouter();
+  const router = useSafeRouter();
   // F-053: Read accountId from route params
   const { accountId } = useLocalSearchParams<{ accountId?: string }>();
   const accountsService = useAccountsService();

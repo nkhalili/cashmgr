@@ -9,15 +9,15 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { useTheme } from '@cashmgr/ui';
 import { Category, AppError, CategoryType } from '@cashmgr/core';
 import { useCategoriesService } from '../../src/contexts/services-context';
+import { useSafeRouter } from '../../src/hooks/useSafeRouter';
 
 export default function CategoriesScreen() {
   const theme = useTheme();
-  const router = useRouter();
+  const router = useSafeRouter();
   const categoriesService = useCategoriesService();
 
   const [categories, setCategories] = React.useState<Category[]>([]);

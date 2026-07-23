@@ -14,8 +14,9 @@ import {
   Pressable,
   Alert,
 } from 'react-native';
-import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeRouter } from '../src/hooks/useSafeRouter';
 import { Theme, useTheme } from '@cashmgr/ui';
 import {
   Account,
@@ -92,7 +93,7 @@ const SearchBar = React.memo(({
 // F-053: Account-specific transactions screen
 export default function AccountTransactionsScreen() {
   const theme = useTheme();
-  const router = useRouter();
+  const router = useSafeRouter();
   const { accountId } = useLocalSearchParams<{ accountId: string }>();
   const accountsService = useAccountsService();
   const categoriesService = useCategoriesService();

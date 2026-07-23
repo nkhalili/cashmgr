@@ -435,6 +435,7 @@ Tests are co-located in `__tests__/` next to each repository, using in-memory SQ
 - Expo Router (file-based routing)
 - Settings is a navigation menu — each section (`settings-currencies`, `settings-appearance`, etc.) is a separate screen at the root of `apps/mobile/app/`
 - `useFocusEffect` from `@react-navigation/native` for data reload on tab focus
+- `useSafeRouter` (`apps/mobile/src/hooks/useSafeRouter.ts`) wraps `useRouter()` and debounces `.push()` — use it instead of `useRouter` for any row/button that navigates, so a rapid double-tap can't push a duplicate stack entry (which made the header Back button look broken, since it only popped the duplicate)
 - Modal-based selectors (not native Picker) for better UX
 - Jest for testing (not Vitest — React Native compatibility)
 
