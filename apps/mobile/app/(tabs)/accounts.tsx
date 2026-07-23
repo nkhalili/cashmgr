@@ -305,17 +305,17 @@ export default function AccountsScreen() {
       <View style={styles.summaryCard}>
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Assets</Text>
-          <Text style={styles.summaryValue}>{summary.assetsFormatted}</Text>
+          <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{summary.assetsFormatted}</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Liabilities</Text>
-          <Text style={[styles.summaryValue, styles.summaryValueDanger]}>{summary.liabilitiesFormatted}</Text>
+          <Text style={[styles.summaryValue, styles.summaryValueDanger]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{summary.liabilitiesFormatted}</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Net</Text>
-          <Text style={[styles.summaryValue, summary.netIsNegative ? styles.summaryValueDanger : styles.summaryValueSuccess]}>{summary.netFormatted}</Text>
+          <Text style={[styles.summaryValue, summary.netIsNegative ? styles.summaryValueDanger : styles.summaryValueSuccess]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{summary.netFormatted}</Text>
         </View>
       </View>
     );
@@ -406,7 +406,7 @@ const createStyles = (theme: Theme) =>
       marginBottom: theme.spacing.xs,
     },
     summaryValue: {
-      fontSize: theme.typography.h3.fontSize,
+      fontSize: theme.typography.body.fontSize,
       fontWeight: fontWeight(700),
       color: theme.colors.textPrimary,
     },
