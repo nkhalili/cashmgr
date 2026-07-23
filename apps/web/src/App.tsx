@@ -12,6 +12,7 @@ import { SettingsCurrencies } from './pages/SettingsCurrencies';
 import { SettingsAppearance } from './pages/SettingsAppearance';
 import { SettingsBackup } from './pages/SettingsBackup';
 import { SettingsCsv } from './pages/SettingsCsv';
+import { SettingsLogs } from './pages/SettingsLogs';
 import { SettingsDevelopment } from './pages/SettingsDevelopment';
 import { SettingsAbout } from './pages/SettingsAbout';
 import { SettingsRecurringTransactions } from './pages/SettingsRecurringTransactions';
@@ -146,6 +147,7 @@ export const App: React.FC = () => {
             <Route path="/settings/appearance" element={<SettingsAppearance />} />
             <Route path="/settings/backup" element={<SettingsBackup />} />
             <Route path="/settings/csv" element={<SettingsCsv />} />
+            <Route path="/settings/logs" element={<SettingsLogs />} />
             <Route path="/settings/recurring" element={<SettingsRecurringTransactions />} />
             <Route path="/settings/recurring/:id/edit" element={<SettingsRecurringEdit />} />
             <Route path="/settings/development" element={<SettingsDevelopment />} />

@@ -2,13 +2,20 @@ import React from 'react';
 import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@cashmgr/ui';
+import { setLogger } from '@cashmgr/core';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
+import { MobileFileLogger } from '../src/logging/mobile-file-logger';
+import { installGlobalErrorHandlers } from '../src/logging/global-error-handlers';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { ThemePreferenceProvider } from '../src/contexts/theme-context';
 import { CreditDisplayProvider } from '../src/contexts/credit-display-context';
 import { ServicesProvider } from '../src/contexts/services-context';
 import { UpdateBanner } from '../src/components/UpdateBanner';
 import { useStoreUpdateCheck } from '../src/hooks/useStoreUpdateCheck';
 import { UpdateDevContext } from '../src/contexts/update-context';
+
+setLogger(new MobileFileLogger());
+installGlobalErrorHandlers();
 
 function RootStack() {
   const theme = useTheme();
@@ -60,12 +67,14 @@ function RootStack() {
 
 export default function RootLayout() {
   return (
-    <ThemePreferenceProvider>
-      <CreditDisplayProvider>
-        <ServicesProvider>
-          <RootStack />
-        </ServicesProvider>
-      </CreditDisplayProvider>
-    </ThemePreferenceProvider>
+    <ErrorBoundary>
+      <ThemePreferenceProvider>
+        <CreditDisplayProvider>
+          <ServicesProvider>
+            <RootStack />
+          </ServicesProvider>
+        </CreditDisplayProvider>
+      </ThemePreferenceProvider>
+    </ErrorBoundary>
   );
 }

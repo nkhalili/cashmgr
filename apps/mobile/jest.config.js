@@ -19,6 +19,7 @@ module.exports = {
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
     '!src/**/__tests__/**',
+    '!src/logging/mobile-file-logger.ts', // Native expo-file-system I/O, untestable in current environment
   ],
   testMatch: [
     '<rootDir>/src/**/__tests__/**/*.{ts,tsx}',

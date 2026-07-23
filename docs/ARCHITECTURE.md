@@ -308,7 +308,25 @@ AppError
   └── NotFoundError     ← Entity not found
 ```
 
-Use `ErrorHandler.handle()` for consistent logging. React `ErrorBoundary` is used at the UI level.
+Use `ErrorHandler.handle()` for consistent logging. React `ErrorBoundary` is used at the UI level (`packages/ui/src/ErrorBoundary.tsx` for web, `apps/mobile/src/components/ErrorBoundary.tsx` for mobile — the mobile version renders RN host components instead of `div`/`button`, since `packages/ui` targets web/DOM). Error boundaries only catch errors thrown during rendering/lifecycle methods, not errors from event handlers, timers, or unhandled promise rejections — see "Global error capture" below for how those are covered.
+
+`ErrorHandler` logs through the `Logger` set via `setLogger()` (`packages/core/src/services/logger.ts`). Each platform installs a local, file-based sink at startup instead of a remote error-tracking service, since crash/error data can include financial context that shouldn't leave the device:
+
+- Web: `WebFileLogger` (`apps/web/src/logging/web-file-logger.ts`) writes JSON-line entries to `app.log` in OPFS, falling back to `ConsoleLogger` where OPFS is unsupported.
+- Mobile: `MobileFileLogger` (`apps/mobile/src/logging/mobile-file-logger.ts`) writes to `<documentDirectory>/logs/app.log` via `expo-file-system`.
+- Desktop: `DesktopFileLogger` (`apps/desktop/src/logger.ts`) writes to `<userData>/logs/app.log` in the Electron main process, and `process.on('uncaughtException'|'unhandledRejection')` handlers route through `ErrorHandler` (`apps/desktop/src/main.ts`).
+
+All three sinks are simple ring-buffer-style: they truncate/rotate once the log file crosses a size cap rather than growing unbounded. Settings → Data → Logs (`apps/web/src/pages/SettingsLogs.tsx`, `apps/mobile/app/settings-logs.tsx`) shows the current log size and lets the user share/download it for a bug report — web triggers a browser download, mobile opens the native share sheet, desktop gets the web screen for free since its renderer loads the web bundle. The desktop main process's own log has no export UI (it's a separate process/file) — retrieving it means pulling it from `<userData>/logs/app.log` directly.
+
+#### Global error capture
+
+`ErrorBoundary` and explicit `try`/`catch` + `ErrorHandler.handle()` calls in the service layer only catch a subset of runtime errors. `installGlobalErrorHandlers()` closes the rest of the gap for errors that would otherwise vanish silently:
+
+- Web (`apps/web/src/logging/global-error-handlers.ts`, also covers desktop's renderer): `window.addEventListener('error', …)` and `('unhandledrejection', …)`.
+- Mobile (`apps/mobile/src/logging/global-error-handlers.ts`): wraps RN's `ErrorUtils.setGlobalHandler()` (chaining to the previous handler so LogBox/redbox and the default fatal-error restart behavior still run), plus Hermes's `HermesInternal.enablePromiseRejectionTracker` for unhandled promise rejections — but only outside `__DEV__`, since RN itself only wires that tracker up in dev (via LogBox) and never in production, and re-registering it in dev would clobber LogBox's own tracker.
+- Desktop main process: `process.on('uncaughtException'|'unhandledRejection')` in `main.ts` (see above).
+
+Still not covered by design: fully native crashes outside the JS runtime (would require a native crash reporter like Sentry/Crashlytics — deliberately out of scope given the local-only, privacy-first logging approach).
 
 ### Migration System
 
@@ -420,6 +438,13 @@ Tests are co-located in `__tests__/` next to each repository, using in-memory SQ
 - Modal-based selectors (not native Picker) for better UX
 - Jest for testing (not Vitest — React Native compatibility)
 
+### Desktop (`apps/desktop`)
+
+- Electron; the renderer loads the built `apps/web` bundle via a custom `app://` protocol (so it shares the web app's OPFS-backed SQLite and `WebFileLogger`)
+- `better-sqlite3` is present for a future native adapter but is currently unused — the renderer uses the web SQLite stack instead
+- Main process (`apps/desktop/src/main.ts`) has its own `DesktopFileLogger` and top-level `uncaughtException`/`unhandledRejection` handlers, since it runs in a separate Node process from the renderer
+- No test suite yet (no Jest/Vitest config) — main-process code is currently untested
+
 ---
 
 ## Testing
@@ -438,6 +463,8 @@ Files excluded from coverage (untestable in current environment):
 
 - `apps/web/src/database/**` — browser WASM/OPFS
 - `apps/web/src/hooks/**` — React hooks
+- `apps/web/src/logging/web-file-logger.ts` — browser-specific OPFS file I/O
+- `apps/mobile/src/logging/mobile-file-logger.ts` — native `expo-file-system` file I/O
 - `packages/db/src/adapters/**` — platform SQLite adapters
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for test patterns, checklists, and examples.

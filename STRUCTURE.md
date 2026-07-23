@@ -23,7 +23,11 @@ cashmgr/
 │   │   │   │   ├── AddTransaction.tsx # Transaction form
 │   │   │   │   ├── Accounts.tsx       # Accounts list
 │   │   │   │   ├── Categories.tsx     # Categories management
-│   │   │   │   └── Settings.tsx       # Settings page
+│   │   │   │   ├── Settings.tsx       # Settings page
+│   │   │   │   └── SettingsLogs.tsx   # Share/download the local error log
+│   │   │   ├── logging/
+│   │   │   │   ├── web-file-logger.ts        # OPFS-backed file logger (app.log)
+│   │   │   │   └── global-error-handlers.ts  # window.onerror / unhandledrejection → logger
 │   │   │   ├── App.tsx                # Main app component with routing
 │   │   │   ├── App.css                # App styles
 │   │   │   ├── main.tsx               # Entry point
@@ -38,7 +42,8 @@ cashmgr/
 │   │   ├── src/
 │   │   │   ├── main.ts                # Electron main process
 │   │   │   ├── preload.ts             # IPC bridge & context isolation
-│   │   │   └── database.ts            # better-sqlite3 wrapper
+│   │   │   ├── database.ts            # better-sqlite3 wrapper
+│   │   │   └── logger.ts              # Main-process file logger (userData/logs/app.log)
 │   │   ├── package.json               # Desktop app dependencies
 │   │   ├── tsconfig.json              # TypeScript config (CommonJS)
 │   │   └── README.md                  # Desktop app documentation
@@ -51,10 +56,14 @@ cashmgr/
 │       │   │   ├── add.tsx            # Add transaction screen
 │       │   │   ├── accounts.tsx       # Accounts screen
 │       │   │   └── settings.tsx       # Settings screen
+│       │   ├── settings-logs.tsx      # Share the local error log (native share sheet)
 │       │   └── _layout.tsx            # Root layout
 │       ├── src/
-│       │   └── database/
-│       │       └── index.ts           # expo-sqlite wrapper
+│       │   ├── database/
+│       │   │   └── index.ts           # expo-sqlite wrapper
+│       │   └── logging/
+│       │       ├── mobile-file-logger.ts     # expo-file-system file logger (app.log)
+│       │       └── global-error-handlers.ts  # ErrorUtils + Hermes rejection tracker → logger
 │       ├── app.json                   # Expo configuration
 │       ├── babel.config.js            # Babel configuration
 │       ├── package.json               # Mobile app dependencies

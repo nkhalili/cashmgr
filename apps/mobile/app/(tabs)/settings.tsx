@@ -107,6 +107,12 @@ export default function SettingsScreen() {
           route: '/settings-csv',
           icon: 'document-text-outline',
         },
+        {
+          label: 'Logs',
+          subtitle: 'Share the local error log',
+          route: '/settings-logs',
+          icon: 'bug-outline',
+        },
       ],
     },
     {

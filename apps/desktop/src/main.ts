@@ -2,6 +2,26 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, 
 import { autoUpdater, UpdateDownloadedEvent } from 'electron-updater';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
+import { ErrorHandler, setLogger } from '@cashmgr/core';
+import { DesktopFileLogger } from './logger';
+
+setLogger(new DesktopFileLogger());
+
+process.on('uncaughtException', (error) => {
+  ErrorHandler.handle(error, 'main:uncaughtException');
+  dialog.showMessageBoxSync({
+    type: 'error',
+    title: 'Unexpected Error',
+    message: 'Cash Mgr. encountered an unexpected error and needs to close.',
+    detail: error.message,
+    buttons: ['OK'],
+  });
+  app.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  ErrorHandler.handle(reason, 'main:unhandledRejection');
+});
 
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = false;

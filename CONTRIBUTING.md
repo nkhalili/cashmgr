@@ -347,6 +347,8 @@ These files are excluded from coverage requirements (untestable in current envir
 
 - `apps/web/src/database/**` — browser WASM/IndexedDB
 - `apps/web/src/hooks/**` — React hooks
+- `apps/web/src/logging/web-file-logger.ts` — browser-specific OPFS file I/O
+- `apps/mobile/src/logging/mobile-file-logger.ts` — native `expo-file-system` file I/O
 - `packages/db/src/adapters/**` — platform SQLite adapters
 
 ### Checklist Before Committing

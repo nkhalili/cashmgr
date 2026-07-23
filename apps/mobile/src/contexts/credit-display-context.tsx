@@ -1,5 +1,6 @@
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getLogger } from '@cashmgr/core';
 
 const SHOW_CREDIT_BALANCES_STORAGE_KEY = 'cashmgr-show-credit-balances';
 
@@ -28,7 +29,7 @@ export function CreditDisplayProvider({ children }: { children: React.ReactNode 
   const setShow = React.useCallback((value: boolean) => {
     setShowState(value);
     AsyncStorage.setItem(SHOW_CREDIT_BALANCES_STORAGE_KEY, String(value)).catch((err) => {
-      console.warn('Failed to save show-credit-balances preference:', err);
+      getLogger().warn('Failed to save show-credit-balances preference', { error: err });
     });
   }, []);
 
