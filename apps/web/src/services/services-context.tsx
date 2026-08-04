@@ -10,6 +10,7 @@ import { CurrenciesService } from './currencies-service';
 import { DashboardService } from './dashboard-service';
 import { RecurringTransactionsService } from './recurring-transactions-service';
 import { TransactionsService } from './transactions-service';
+import { CreditAutoPaymentService } from './credit-autopay-service';
 import { createWebSqliteDatabase } from '../database/web-sqlite-database';
 
 interface ServicesContextValue {
@@ -22,6 +23,7 @@ interface ServicesContextValue {
   dashboardService: DashboardService;
   recurringTransactionsService: RecurringTransactionsService;
   transactionsService: TransactionsService;
+  creditAutoPaymentService: CreditAutoPaymentService;
 }
 
 const ServicesContext = React.createContext<ServicesContextValue | null>(null);
@@ -43,10 +45,14 @@ export const ServicesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         const transactionsService = new TransactionsService(adapter);
         const recurringTransactionsService = new RecurringTransactionsService(adapter, transactionsService);
+        const creditAutoPaymentService = new CreditAutoPaymentService(adapter, transactionsService);
 
         // Generate pending recurring transactions before making the app usable
         // so the Settings > Recurring page always shows the current lastGeneratedDate.
         await recurringTransactionsService.generateDueTransactions();
+
+        // Catch up on any due credit card auto-payments (same app-open pattern as above).
+        await creditAutoPaymentService.processDuePayments();
 
         setValue({
           database: db,
@@ -58,6 +64,7 @@ export const ServicesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           dashboardService: new DashboardService(adapter),
           recurringTransactionsService,
           transactionsService,
+          creditAutoPaymentService,
         });
       } catch (err) {
         // F-024: Use ErrorHandler for centralized error handling
@@ -173,5 +180,14 @@ export function useDashboardService(): DashboardService {
   }
 
   return ctx.dashboardService;
+}
+
+export function useCreditAutoPaymentService(): CreditAutoPaymentService {
+  const ctx = React.useContext(ServicesContext);
+  if (!ctx) {
+    throw new Error('ServicesProvider is missing from component tree.');
+  }
+
+  return ctx.creditAutoPaymentService;
 }
 

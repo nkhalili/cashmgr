@@ -115,6 +115,15 @@ const ALL_TEST_SCHEMA_STATEMENTS = [
   // Migration 009: Link transactions to recurring templates
   'ALTER TABLE transactions ADD COLUMN recurring_transaction_id TEXT;',
   'CREATE INDEX IF NOT EXISTS idx_transactions_recurring ON transactions(recurring_transaction_id);',
+  // Migration 010: Credit account statement/payment cycle and auto-payment
+  'ALTER TABLE accounts ADD COLUMN statement_day INTEGER;',
+  'ALTER TABLE accounts ADD COLUMN payment_day INTEGER;',
+  'ALTER TABLE accounts ADD COLUMN payment_account_id TEXT;',
+  'ALTER TABLE accounts ADD COLUMN auto_payment_enabled INTEGER NOT NULL DEFAULT 0;',
+  'ALTER TABLE accounts ADD COLUMN auto_payment_mode TEXT;',
+  'ALTER TABLE accounts ADD COLUMN auto_payment_fixed_amount REAL;',
+  'ALTER TABLE accounts ADD COLUMN last_auto_payment_date TEXT;',
+  'CREATE INDEX IF NOT EXISTS idx_accounts_auto_payment ON accounts(auto_payment_enabled);',
 ];
 
 /**

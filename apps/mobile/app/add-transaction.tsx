@@ -26,6 +26,7 @@ import {
   RecurringFrequency,
   RECURRING_FREQUENCY_LABELS,
   RECURRING_FREQUENCIES,
+  ACCOUNT_TYPE_GROUPS,
 } from '@cashmgr/core';
 import {
   useAccountsService,
@@ -35,6 +36,7 @@ import {
 } from '../src/contexts/services-context';
 import { useFormValidation } from '../src/hooks/useFormValidation';
 import { DateInput } from '../src/components/DateInput';
+import { Switch } from '../src/components/Switch';
 
 const TRANSACTION_TYPES: { label: string; value: TransactionType }[] = [
   { label: 'Expense', value: 'expense' },
@@ -56,6 +58,7 @@ export default function AddTransactionScreen() {
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const keyboardHeight = useKeyboardHeight();
   const scrollViewRef = React.useRef<ScrollView>(null);
+  const amountInputRef = React.useRef<TextInput>(null);
 
   // Form state
   const [type, setType] = React.useState<TransactionType>('expense');
@@ -102,6 +105,13 @@ export default function AddTransactionScreen() {
     }),
     [type, amount, date, accountId, categoryId, toAccountId, notes, accounts]
   );
+
+  // Focus amount input once data finishes loading
+  React.useEffect(() => {
+    if (!isLoading) {
+      setTimeout(() => amountInputRef.current?.focus(), 100);
+    }
+  }, [isLoading]);
 
   // Load accounts and categories when tab is focused
   useFocusEffect(
@@ -192,6 +202,18 @@ export default function AddTransactionScreen() {
     return accounts.filter((a) => a.id !== accountId);
   }, [accounts, accountId]);
 
+  // Group accounts by type (Cash / Bank Accounts / Credit Cards) for the account pickers
+  const groupAccounts = React.useCallback((list: Account[]) => {
+    return ACCOUNT_TYPE_GROUPS
+      .map((group) => ({ ...group, accounts: list.filter((a) => a.type === group.type) }))
+      .filter((group) => group.accounts.length > 0);
+  }, []);
+  const accountGroups = React.useMemo(() => groupAccounts(accounts), [accounts, groupAccounts]);
+  const destinationAccountGroups = React.useMemo(
+    () => groupAccounts(destinationAccounts),
+    [destinationAccounts, groupAccounts]
+  );
+
   // Reset destination account when source account changes
   React.useEffect(() => {
     if (toAccountId && toAccountId === accountId) {
@@ -268,7 +290,6 @@ export default function AddTransactionScreen() {
         await transactionsService.createTransaction(formValues);
         setSuccess('Transaction created successfully!');
       }
-      resetForm();
 
       setTimeout(() => {
         router.replace('/transactions');
@@ -363,6 +384,7 @@ export default function AddTransactionScreen() {
               Amount <Text style={styles.required}>*</Text>
             </Text>
             <TextInput
+              ref={amountInputRef}
               style={[styles.input, errors.amount && styles.inputError]}
               placeholder="0.00"
               placeholderTextColor={theme.colors.textSecondary}
@@ -479,38 +501,12 @@ export default function AddTransactionScreen() {
 
           {/* Recurrence */}
           <View style={[styles.fieldContainer, { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing.md }]}>
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-              onPress={() => setIsRecurring(!isRecurring)}
-              activeOpacity={0.7}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.label, { marginBottom: 2 }]}>Make recurring</Text>
-                <Text style={{ fontSize: theme.typography.caption.fontSize, color: theme.colors.textSecondary }}>
-                  Repeat this transaction on a schedule
-                </Text>
-              </View>
-              <View
-                style={{
-                  width: 44,
-                  height: 26,
-                  borderRadius: 13,
-                  backgroundColor: isRecurring ? theme.colors.primary : theme.colors.border,
-                  justifyContent: 'center',
-                  paddingHorizontal: 3,
-                }}
-              >
-                <View
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    backgroundColor: '#fff',
-                    alignSelf: isRecurring ? 'flex-end' : 'flex-start',
-                  }}
-                />
-              </View>
-            </TouchableOpacity>
+            <Switch
+              value={isRecurring}
+              onChange={setIsRecurring}
+              label="Make recurring"
+              helperText="Repeat this transaction on a schedule"
+            />
 
             {isRecurring && (
               <View style={{ marginTop: theme.spacing.md, gap: theme.spacing.md }}>
@@ -592,17 +588,22 @@ export default function AddTransactionScreen() {
             </Pressable>
           </View>
           <ScrollView style={styles.modalContent}>
-            {accounts.map((account) => (
-              <Pressable
-                key={account.id}
-                style={styles.modalOption}
-                onPress={() => handleSelectAccount(account.id)}
-              >
-                <Text style={styles.modalOptionText}>
-                  {account.name} ({account.currency})
-                </Text>
-                {accountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
-              </Pressable>
+            {accountGroups.map((group) => (
+              <React.Fragment key={group.type}>
+                <Text style={styles.modalSectionHeader}>{group.label}</Text>
+                {group.accounts.map((account) => (
+                  <Pressable
+                    key={account.id}
+                    style={styles.modalOption}
+                    onPress={() => handleSelectAccount(account.id)}
+                  >
+                    <Text style={styles.modalOptionText}>
+                      {account.name} ({account.currency})
+                    </Text>
+                    {accountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
+                  </Pressable>
+                ))}
+              </React.Fragment>
             ))}
           </ScrollView>
         </View>
@@ -623,17 +624,22 @@ export default function AddTransactionScreen() {
             </Pressable>
           </View>
           <ScrollView style={styles.modalContent}>
-            {destinationAccounts.map((account) => (
-              <Pressable
-                key={account.id}
-                style={styles.modalOption}
-                onPress={() => handleSelectToAccount(account.id)}
-              >
-                <Text style={styles.modalOptionText}>
-                  {account.name} ({account.currency})
-                </Text>
-                {toAccountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
-              </Pressable>
+            {destinationAccountGroups.map((group) => (
+              <React.Fragment key={group.type}>
+                <Text style={styles.modalSectionHeader}>{group.label}</Text>
+                {group.accounts.map((account) => (
+                  <Pressable
+                    key={account.id}
+                    style={styles.modalOption}
+                    onPress={() => handleSelectToAccount(account.id)}
+                  >
+                    <Text style={styles.modalOptionText}>
+                      {account.name} ({account.currency})
+                    </Text>
+                    {toAccountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
+                  </Pressable>
+                ))}
+              </React.Fragment>
             ))}
           </ScrollView>
         </View>
@@ -953,6 +959,15 @@ const createStyles = (theme: Theme) =>
       fontSize: 18,
       color: theme.colors.primary,
       fontWeight: fontWeight(600),
+    },
+    modalSectionHeader: {
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: fontWeight(600),
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.md,
+      paddingBottom: theme.spacing.xs,
     },
     modalEmpty: {
       padding: theme.spacing.xl,

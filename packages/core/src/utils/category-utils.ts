@@ -4,6 +4,7 @@
  */
 
 import type { Category } from '../models/Category';
+import type { CategoryAggregation } from '../types';
 
 /**
  * Flattened category with display metadata
@@ -133,4 +134,85 @@ export function getParentCategories(categories: Category[]): Category[] {
  */
 export function getChildCategories(categories: Category[], parentId: string): Category[] {
   return categories.filter((c) => c.parentId === parentId);
+}
+
+function roundToOneDecimal(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+/**
+ * Build a parent/child tree out of flat per-category aggregation rows.
+ *
+ * Sub-category totals are rolled up into their parent's total, and the parent's
+ * percentage is relative to the grand total, while each sub-category's percentage
+ * is relative to its parent's (rolled-up) total.
+ *
+ * Parents that have no transactions of their own but do have sub-category spending
+ * still appear (using the category's own name/icon/color) with a total equal to the
+ * sum of their sub-categories.
+ *
+ * @param aggregations - Flat aggregation rows, one per category that has transactions
+ * @param categories - Full category list, used to resolve parent/child relationships
+ *   and to fill in name/icon/color for parents with no direct transactions
+ * @returns Top-level aggregations, each with rolled-up totals and a `subcategories` array
+ */
+export function buildCategoryAggregationTree(
+  aggregations: CategoryAggregation[],
+  categories: Category[],
+): CategoryAggregation[] {
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  const aggregationById = new Map(aggregations.map((a) => [a.categoryId, a]));
+  const nodeById = new Map<string, CategoryAggregation>();
+
+  const getOrCreateNode = (categoryId: string): CategoryAggregation | null => {
+    const existing = nodeById.get(categoryId);
+    if (existing) return existing;
+
+    const category = categoryById.get(categoryId);
+    const agg = aggregationById.get(categoryId);
+    if (!category && !agg) return null;
+
+    const node: CategoryAggregation = {
+      categoryId,
+      categoryName: category ? category.name : agg!.categoryName,
+      categoryIcon: category ? (category.icon ?? null) : agg!.categoryIcon,
+      categoryColor: category ? (category.color ?? null) : agg!.categoryColor,
+      parentId: category?.parentId ?? null,
+      total: agg?.total ?? 0,
+      count: agg?.count ?? 0,
+      subcategories: [],
+    };
+    nodeById.set(categoryId, node);
+    return node;
+  };
+
+  for (const agg of aggregations) {
+    const node = getOrCreateNode(agg.categoryId)!;
+    const parentId = categoryById.get(agg.categoryId)?.parentId;
+
+    if (parentId) {
+      const parentNode = getOrCreateNode(parentId);
+      if (parentNode) {
+        parentNode.total += agg.total;
+        parentNode.count += agg.count;
+        parentNode.subcategories!.push(node);
+      }
+    }
+  }
+
+  const topLevelNodes = Array.from(nodeById.values()).filter((node) => !node.parentId);
+  const grandTotal = topLevelNodes.reduce((sum, node) => sum + node.total, 0);
+
+  return topLevelNodes
+    .map((node) => ({
+      ...node,
+      percentage: grandTotal > 0 ? roundToOneDecimal((node.total / grandTotal) * 100) : 0,
+      subcategories: (node.subcategories ?? [])
+        .map((child) => ({
+          ...child,
+          percentage: node.total > 0 ? roundToOneDecimal((child.total / node.total) * 100) : 0,
+        }))
+        .sort((a, b) => b.total - a.total),
+    }))
+    .sort((a, b) => b.total - a.total);
 }

@@ -70,6 +70,13 @@ export class MockCoreAdapter implements DatabaseAdapter {
       balance: input.initialBalance ?? 0,
       initialBalance: input.initialBalance ?? 0,
       currency: input.currency ?? 'USD',
+      statementDay: input.statementDay ?? null,
+      paymentDay: input.paymentDay ?? null,
+      paymentAccountId: input.paymentAccountId ?? null,
+      autoPaymentEnabled: input.autoPaymentEnabled ?? false,
+      autoPaymentMode: input.autoPaymentMode ?? null,
+      autoPaymentFixedAmount: input.autoPaymentFixedAmount ?? null,
+      lastAutoPaymentDate: null,
       createdAt: now,
       updatedAt: now,
     };

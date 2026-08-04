@@ -58,6 +58,7 @@ export function Settings() {
       rows: [
         { label: 'Backup', subtitle: 'Export & import JSON', route: '/settings/backup', icon: '☁️' },
         { label: 'Transactions (CSV)', subtitle: 'Export & import CSV', route: '/settings/csv', icon: '📄' },
+        { label: 'Logs', subtitle: 'Download the local error log', route: '/settings/logs', icon: '🐞' },
       ],
     },
     {

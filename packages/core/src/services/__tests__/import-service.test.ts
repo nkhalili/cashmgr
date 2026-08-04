@@ -15,7 +15,7 @@ function makeBackup(overrides: Partial<ExportBackup> = {}): string {
     },
     data: {
       accounts: [
-        { id: 'acc-1', name: 'Cash', type: 'cash', balance: 150, initialBalance: 100, currency: 'USD', createdAt: 1000, updatedAt: 2000 },
+        { id: 'acc-1', name: 'Cash', type: 'cash', balance: 150, initialBalance: 100, currency: 'USD', autoPaymentEnabled: false, createdAt: 1000, updatedAt: 2000 },
       ],
       categories: [
         { id: 'cat-1', name: 'Groceries', type: 'expense', isActive: true, createdAt: 1000, updatedAt: 1000 },
@@ -144,7 +144,7 @@ describe('importData', () => {
     it('clears existing data before import', async () => {
       adapter.seed({
         accounts: [
-          { id: 'old-acc', name: 'Old Account', type: 'cash', balance: 0, initialBalance: 0, currency: 'USD', createdAt: 500, updatedAt: 500 },
+          { id: 'old-acc', name: 'Old Account', type: 'cash', balance: 0, initialBalance: 0, currency: 'USD', autoPaymentEnabled: false, createdAt: 500, updatedAt: 500 },
         ],
       });
 
@@ -183,7 +183,7 @@ describe('importData', () => {
     it('adds new entities without removing existing', async () => {
       adapter.seed({
         accounts: [
-          { id: 'existing-acc', name: 'Existing', type: 'cash', balance: 0, initialBalance: 0, currency: 'USD', createdAt: 500, updatedAt: 500 },
+          { id: 'existing-acc', name: 'Existing', type: 'cash', balance: 0, initialBalance: 0, currency: 'USD', autoPaymentEnabled: false, createdAt: 500, updatedAt: 500 },
         ],
         categories: [
           { id: 'cat-1', name: 'Groceries', type: 'expense', isActive: true, createdAt: 1000, updatedAt: 1000 },
@@ -203,7 +203,7 @@ describe('importData', () => {
     it('skips entities with same ID and same or older updatedAt', async () => {
       adapter.seed({
         accounts: [
-          { id: 'acc-1', name: 'Original Name', type: 'cash', balance: 50, initialBalance: 50, currency: 'USD', createdAt: 1000, updatedAt: 9999 },
+          { id: 'acc-1', name: 'Original Name', type: 'cash', balance: 50, initialBalance: 50, currency: 'USD', autoPaymentEnabled: false, createdAt: 1000, updatedAt: 9999 },
         ],
         categories: [
           { id: 'cat-1', name: 'Groceries', type: 'expense', isActive: true, createdAt: 1000, updatedAt: 1000 },
@@ -225,7 +225,7 @@ describe('importData', () => {
     it('updates entity when backup has newer updatedAt', async () => {
       adapter.seed({
         accounts: [
-          { id: 'acc-1', name: 'Old Name', type: 'cash', balance: 50, initialBalance: 50, currency: 'USD', createdAt: 1000, updatedAt: 100 },
+          { id: 'acc-1', name: 'Old Name', type: 'cash', balance: 50, initialBalance: 50, currency: 'USD', autoPaymentEnabled: false, createdAt: 1000, updatedAt: 100 },
         ],
         categories: [
           { id: 'cat-1', name: 'Groceries', type: 'expense', isActive: true, createdAt: 1000, updatedAt: 1000 },
@@ -243,7 +243,7 @@ describe('importData', () => {
     it('skips duplicate transactions', async () => {
       adapter.seed({
         accounts: [
-          { id: 'acc-1', name: 'Cash', type: 'cash', balance: 150, initialBalance: 100, currency: 'USD', createdAt: 1000, updatedAt: 2000 },
+          { id: 'acc-1', name: 'Cash', type: 'cash', balance: 150, initialBalance: 100, currency: 'USD', autoPaymentEnabled: false, createdAt: 1000, updatedAt: 2000 },
         ],
         categories: [
           { id: 'cat-1', name: 'Groceries', type: 'expense', isActive: true, createdAt: 1000, updatedAt: 1000 },
@@ -267,7 +267,7 @@ describe('importData', () => {
 
       adapter.seed({
         accounts: [
-          { id: 'acc-1', name: 'Cash', type: 'cash', balance: 200, initialBalance: 100, currency: 'USD', createdAt: 1000, updatedAt: 2000 },
+          { id: 'acc-1', name: 'Cash', type: 'cash', balance: 200, initialBalance: 100, currency: 'USD', autoPaymentEnabled: false, createdAt: 1000, updatedAt: 2000 },
         ],
         categories: [
           { id: 'cat-1', name: 'Salary', type: 'income', isActive: true, createdAt: 1000, updatedAt: 1000 },

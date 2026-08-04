@@ -57,6 +57,13 @@ export class MockDatabaseAdapter implements DatabaseAdapter {
       currency: input.currency || 'USD',
       initialBalance: input.initialBalance || 0,
       balance: input.initialBalance || 0,
+      statementDay: input.statementDay ?? null,
+      paymentDay: input.paymentDay ?? null,
+      paymentAccountId: input.paymentAccountId ?? null,
+      autoPaymentEnabled: input.autoPaymentEnabled ?? false,
+      autoPaymentMode: input.autoPaymentMode ?? null,
+      autoPaymentFixedAmount: input.autoPaymentFixedAmount ?? null,
+      lastAutoPaymentDate: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -75,6 +82,13 @@ export class MockDatabaseAdapter implements DatabaseAdapter {
       type: input.type !== undefined ? input.type : account.type,
       currency: input.currency !== undefined ? input.currency : account.currency,
       balance: input.balance !== undefined ? input.balance : account.balance,
+      statementDay: input.statementDay !== undefined ? input.statementDay : account.statementDay,
+      paymentDay: input.paymentDay !== undefined ? input.paymentDay : account.paymentDay,
+      paymentAccountId: input.paymentAccountId !== undefined ? input.paymentAccountId : account.paymentAccountId,
+      autoPaymentEnabled: input.autoPaymentEnabled !== undefined ? input.autoPaymentEnabled : account.autoPaymentEnabled,
+      autoPaymentMode: input.autoPaymentMode !== undefined ? input.autoPaymentMode : account.autoPaymentMode,
+      autoPaymentFixedAmount: input.autoPaymentFixedAmount !== undefined ? input.autoPaymentFixedAmount : account.autoPaymentFixedAmount,
+      lastAutoPaymentDate: input.lastAutoPaymentDate !== undefined ? input.lastAutoPaymentDate : account.lastAutoPaymentDate,
       updatedAt: Date.now(),
     };
     return this.accounts[index];

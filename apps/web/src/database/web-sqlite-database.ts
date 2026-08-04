@@ -1,6 +1,7 @@
 import { wrap } from 'comlink';
 import type { Remote } from 'comlink';
 import type { SqliteDatabase, SqliteParams, SqliteRunResult } from '@cashmgr/db';
+import { getLogger } from '@cashmgr/core';
 import { WebSqliteDatabase as LegacyWebSqliteDatabase } from './web-sqlite-database-legacy';
 
 // Comlink's Remote<T> doesn't propagate generic type parameters on methods,
@@ -12,16 +13,16 @@ type WorkerProxy = Remote<{
 
 function isOPFSSupported(): boolean {
   if (typeof navigator === 'undefined' || !('storage' in navigator)) {
-    console.warn('[CashMgr] navigator.storage unavailable — OPFS not supported. Falling back to IndexedDB-backed SQLite.');
+    getLogger().warn('navigator.storage unavailable — OPFS not supported. Falling back to IndexedDB-backed SQLite.');
     return false;
   }
   if (typeof navigator.storage.getDirectory !== 'function') {
-    console.warn('[CashMgr] navigator.storage.getDirectory unavailable — OPFS not supported. Falling back to IndexedDB-backed SQLite.');
+    getLogger().warn('navigator.storage.getDirectory unavailable — OPFS not supported. Falling back to IndexedDB-backed SQLite.');
     return false;
   }
   if (typeof SharedArrayBuffer === 'undefined') {
-    console.warn(
-      '[CashMgr] SharedArrayBuffer unavailable — the page is not cross-origin isolated. ' +
+    getLogger().warn(
+      'SharedArrayBuffer unavailable — the page is not cross-origin isolated. ' +
       'Ensure the server sends Cross-Origin-Opener-Policy: same-origin and Cross-Origin-Embedder-Policy: require-corp headers. ' +
       'Falling back to IndexedDB-backed SQLite. Performance may be degraded.',
     );

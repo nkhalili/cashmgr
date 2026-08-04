@@ -15,6 +15,7 @@ import { useKeyboardHeight } from '../src/hooks/useKeyboardHeight';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { Theme, useTheme } from '@cashmgr/ui';
 import {
+  Account,
   AccountType,
   AppError,
   CreateAccountInputSchema,
@@ -22,12 +23,28 @@ import {
 } from '@cashmgr/core';
 import { useAccountsService } from '../src/contexts/services-context';
 import { useFormValidation } from '../src/hooks/useFormValidation';
+import { Switch } from '../src/components/Switch';
 
 const ACCOUNT_TYPE_OPTIONS: { label: string; value: AccountType }[] = [
   { label: 'Cash on hand', value: 'cash' },
   { label: 'Bank', value: 'bank' },
   { label: 'Credit', value: 'credit' },
 ];
+
+const DAY_OF_MONTH_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
+
+const AUTO_PAYMENT_MODE_OPTIONS: { label: string; value: 'full' | 'fixed' }[] = [
+  { label: 'Full balance payable', value: 'full' },
+  { label: 'Fixed amount', value: 'fixed' },
+];
+
+type ModalType =
+  | 'accountType'
+  | 'statementDay'
+  | 'paymentDay'
+  | 'paymentAccount'
+  | 'autoPaymentMode'
+  | null;
 
 export default function EditAccountScreen() {
   const theme = useTheme();
@@ -39,7 +56,7 @@ export default function EditAccountScreen() {
 
   const [name, setName] = React.useState('');
   const [accountType, setAccountType] = React.useState<AccountType>('cash');
-  const [activeModal, setActiveModal] = React.useState(false);
+  const [activeModal, setActiveModal] = React.useState<ModalType>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -49,17 +66,45 @@ export default function EditAccountScreen() {
   const [currency, setCurrency] = React.useState('USD');
   const [initialBalance, setInitialBalance] = React.useState(0);
 
+  // Credit card settings
+  const [accounts, setAccounts] = React.useState<Account[]>([]);
+  const [statementDay, setStatementDay] = React.useState<number | null>(null);
+  const [paymentDay, setPaymentDay] = React.useState<number | null>(null);
+  const [paymentAccountId, setPaymentAccountId] = React.useState('');
+  const [autoPaymentEnabled, setAutoPaymentEnabled] = React.useState(false);
+  const [autoPaymentMode, setAutoPaymentMode] = React.useState<'full' | 'fixed'>('full');
+  const [autoPaymentFixedAmount, setAutoPaymentFixedAmount] = React.useState('');
+
   // Helper to get form values for validation
-  // F-027: Only name and type can be edited, but we need full object for validation
-  const getFormValues = React.useCallback(
-    () => ({
+  // F-027: Name, type, and (for credit accounts) statement/payment/auto-pay settings can be edited.
+  const getFormValues = React.useCallback(() => {
+    const isCredit = accountType === 'credit';
+    return {
       name: name.trim(),
       type: accountType,
-      initialBalance: initialBalance,
-      currency: currency,
-    }),
-    [name, accountType, initialBalance, currency]
-  );
+      initialBalance,
+      currency,
+      ...(isCredit && statementDay != null ? { statementDay } : {}),
+      ...(isCredit && paymentDay != null ? { paymentDay } : {}),
+      ...(isCredit && paymentAccountId ? { paymentAccountId } : {}),
+      ...(isCredit ? { autoPaymentEnabled } : {}),
+      ...(isCredit && autoPaymentEnabled ? { autoPaymentMode } : {}),
+      ...(isCredit && autoPaymentEnabled && autoPaymentMode === 'fixed' && autoPaymentFixedAmount
+        ? { autoPaymentFixedAmount: Number(autoPaymentFixedAmount) }
+        : {}),
+    };
+  }, [
+    name,
+    accountType,
+    initialBalance,
+    currency,
+    statementDay,
+    paymentDay,
+    paymentAccountId,
+    autoPaymentEnabled,
+    autoPaymentMode,
+    autoPaymentFixedAmount,
+  ]);
 
   // F-026: Client-side form validation
   const { errors, validateField, validateAll, isValid } = useFormValidation(
@@ -79,8 +124,9 @@ export default function EditAccountScreen() {
       setError(null);
 
       try {
-        const accounts = await accountsService.listAccounts();
-        const account = accounts.find((a) => a.id === id);
+        const allAccounts = await accountsService.listAccounts();
+        setAccounts(allAccounts);
+        const account = allAccounts.find((a) => a.id === id);
 
         if (!account) {
           setError('Account not found');
@@ -93,6 +139,14 @@ export default function EditAccountScreen() {
         setCurrentBalance(account.balance);
         setCurrency(account.currency);
         setInitialBalance(account.initialBalance);
+        setStatementDay(account.statementDay ?? null);
+        setPaymentDay(account.paymentDay ?? null);
+        setPaymentAccountId(account.paymentAccountId ?? '');
+        setAutoPaymentEnabled(account.autoPaymentEnabled);
+        setAutoPaymentMode(account.autoPaymentMode ?? 'full');
+        setAutoPaymentFixedAmount(
+          account.autoPaymentFixedAmount != null ? String(account.autoPaymentFixedAmount) : ''
+        );
       } catch (err) {
         const errorMessage =
           err instanceof AppError ? err.getUserMessage() : 'Failed to load account';
@@ -119,10 +173,16 @@ export default function EditAccountScreen() {
     setError(null);
 
     try {
-      // F-027: Only update name and type
+      // F-027: Update name, type, and credit card settings (initial balance is read-only)
       await accountsService.updateAccount(id, {
         name: formValues.name,
         type: formValues.type,
+        statementDay: formValues.statementDay,
+        paymentDay: formValues.paymentDay,
+        paymentAccountId: formValues.paymentAccountId,
+        autoPaymentEnabled: formValues.autoPaymentEnabled,
+        autoPaymentMode: formValues.autoPaymentMode,
+        autoPaymentFixedAmount: formValues.autoPaymentFixedAmount,
       });
       // Navigate back to accounts list
       router.back();
@@ -145,9 +205,47 @@ export default function EditAccountScreen() {
     return option ? option.label : null;
   }, [accountType]);
 
+  const getPaymentAccountLabel = React.useCallback(() => {
+    const account = accounts.find((a) => a.id === paymentAccountId);
+    return account ? account.name : null;
+  }, [accounts, paymentAccountId]);
+
+  const getAutoPaymentModeLabel = React.useCallback(() => {
+    const option = AUTO_PAYMENT_MODE_OPTIONS.find((o) => o.value === autoPaymentMode);
+    return option ? option.label : null;
+  }, [autoPaymentMode]);
+
   const handleSelectAccountType = React.useCallback((value: AccountType) => {
     setAccountType(value);
-    setActiveModal(false);
+    if (value !== 'credit') {
+      setStatementDay(null);
+      setPaymentDay(null);
+      setPaymentAccountId('');
+      setAutoPaymentEnabled(false);
+      setAutoPaymentMode('full');
+      setAutoPaymentFixedAmount('');
+    }
+    setActiveModal(null);
+  }, []);
+
+  const handleSelectStatementDay = React.useCallback((value: number) => {
+    setStatementDay(value);
+    setActiveModal(null);
+  }, []);
+
+  const handleSelectPaymentDay = React.useCallback((value: number) => {
+    setPaymentDay(value);
+    setActiveModal(null);
+  }, []);
+
+  const handleSelectPaymentAccount = React.useCallback((value: string) => {
+    setPaymentAccountId(value);
+    setActiveModal(null);
+  }, []);
+
+  const handleSelectAutoPaymentMode = React.useCallback((value: 'full' | 'fixed') => {
+    setAutoPaymentMode(value);
+    setActiveModal(null);
   }, []);
 
   if (isLoading) {
@@ -222,7 +320,7 @@ export default function EditAccountScreen() {
               <Text style={styles.label}>Account type</Text>
               <TouchableOpacity
                 style={styles.selectField}
-                onPress={() => setActiveModal(true)}
+                onPress={() => setActiveModal('accountType')}
               >
                 <Text style={styles.selectFieldText}>
                   {getAccountTypeLabel() || 'Select account type...'}
@@ -243,6 +341,89 @@ export default function EditAccountScreen() {
                 balance.
               </Text>
             </View>
+
+            {accountType === 'credit' && (
+              <View style={styles.creditSection}>
+                <Text style={styles.creditSectionTitle}>Credit card settings</Text>
+
+                <View style={styles.fieldContainer}>
+                  <Text style={styles.label}>Statement day</Text>
+                  <TouchableOpacity
+                    style={styles.selectField}
+                    onPress={() => setActiveModal('statementDay')}
+                  >
+                    <Text style={styles.selectFieldText}>
+                      {statementDay != null ? String(statementDay) : 'Not set'}
+                    </Text>
+                    <Text style={styles.selectFieldArrow}>›</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.fieldContainer}>
+                  <Text style={styles.label}>Payment due day</Text>
+                  <TouchableOpacity
+                    style={styles.selectField}
+                    onPress={() => setActiveModal('paymentDay')}
+                  >
+                    <Text style={styles.selectFieldText}>
+                      {paymentDay != null ? String(paymentDay) : 'Not set'}
+                    </Text>
+                    <Text style={styles.selectFieldArrow}>›</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.fieldContainer}>
+                  <Text style={styles.label}>Payment account</Text>
+                  <TouchableOpacity
+                    style={styles.selectField}
+                    onPress={() => setActiveModal('paymentAccount')}
+                  >
+                    <Text style={styles.selectFieldText}>
+                      {getPaymentAccountLabel() || 'Select an account...'}
+                    </Text>
+                    <Text style={styles.selectFieldArrow}>›</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.fieldContainer}>
+                  <Switch
+                    value={autoPaymentEnabled}
+                    onChange={setAutoPaymentEnabled}
+                    label="Auto payment"
+                    helperText="Automatically pay from the payment account on the due date"
+                  />
+                </View>
+
+                {autoPaymentEnabled && (
+                  <>
+                    <View style={styles.fieldContainer}>
+                      <Text style={styles.label}>Amount to pay</Text>
+                      <TouchableOpacity
+                        style={styles.selectField}
+                        onPress={() => setActiveModal('autoPaymentMode')}
+                      >
+                        <Text style={styles.selectFieldText}>{getAutoPaymentModeLabel()}</Text>
+                        <Text style={styles.selectFieldArrow}>›</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {autoPaymentMode === 'fixed' && (
+                      <View style={styles.fieldContainer}>
+                        <Text style={styles.label}>Fixed payment amount</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="10.00"
+                          placeholderTextColor={theme.colors.textSecondary}
+                          value={autoPaymentFixedAmount}
+                          onChangeText={setAutoPaymentFixedAmount}
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
+            )}
           </View>
 
           {/* Actions */}
@@ -275,15 +456,15 @@ export default function EditAccountScreen() {
 
       {/* Account Type Selection Modal */}
       <Modal
-        visible={activeModal}
+        visible={activeModal === 'accountType'}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setActiveModal(false)}
+        onRequestClose={() => setActiveModal(null)}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select Account Type</Text>
-            <Pressable onPress={() => setActiveModal(false)}>
+            <Pressable onPress={() => setActiveModal(null)}>
               <Text style={styles.modalClose}>Done</Text>
             </Pressable>
           </View>
@@ -296,6 +477,122 @@ export default function EditAccountScreen() {
               >
                 <Text style={styles.modalOptionText}>{option.label}</Text>
                 {accountType === option.value && <Text style={styles.modalOptionCheck}>✓</Text>}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Statement Day Selection Modal */}
+      <Modal
+        visible={activeModal === 'statementDay'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setActiveModal(null)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Statement Day</Text>
+            <Pressable onPress={() => setActiveModal(null)}>
+              <Text style={styles.modalClose}>Done</Text>
+            </Pressable>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            {DAY_OF_MONTH_OPTIONS.map((day) => (
+              <Pressable
+                key={day}
+                style={styles.modalOption}
+                onPress={() => handleSelectStatementDay(day)}
+              >
+                <Text style={styles.modalOptionText}>{day}</Text>
+                {statementDay === day && <Text style={styles.modalOptionCheck}>✓</Text>}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Payment Day Selection Modal */}
+      <Modal
+        visible={activeModal === 'paymentDay'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setActiveModal(null)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Payment Day</Text>
+            <Pressable onPress={() => setActiveModal(null)}>
+              <Text style={styles.modalClose}>Done</Text>
+            </Pressable>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            {DAY_OF_MONTH_OPTIONS.map((day) => (
+              <Pressable
+                key={day}
+                style={styles.modalOption}
+                onPress={() => handleSelectPaymentDay(day)}
+              >
+                <Text style={styles.modalOptionText}>{day}</Text>
+                {paymentDay === day && <Text style={styles.modalOptionCheck}>✓</Text>}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Payment Account Selection Modal */}
+      <Modal
+        visible={activeModal === 'paymentAccount'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setActiveModal(null)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Payment Account</Text>
+            <Pressable onPress={() => setActiveModal(null)}>
+              <Text style={styles.modalClose}>Done</Text>
+            </Pressable>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            {accounts.filter((a) => a.id !== id).map((account) => (
+              <Pressable
+                key={account.id}
+                style={styles.modalOption}
+                onPress={() => handleSelectPaymentAccount(account.id)}
+              >
+                <Text style={styles.modalOptionText}>{account.name}</Text>
+                {paymentAccountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Auto Payment Mode Selection Modal */}
+      <Modal
+        visible={activeModal === 'autoPaymentMode'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setActiveModal(null)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Payment Amount</Text>
+            <Pressable onPress={() => setActiveModal(null)}>
+              <Text style={styles.modalClose}>Done</Text>
+            </Pressable>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            {AUTO_PAYMENT_MODE_OPTIONS.map((option) => (
+              <Pressable
+                key={option.value}
+                style={styles.modalOption}
+                onPress={() => handleSelectAutoPaymentMode(option.value)}
+              >
+                <Text style={styles.modalOptionText}>{option.label}</Text>
+                {autoPaymentMode === option.value && <Text style={styles.modalOptionCheck}>✓</Text>}
               </Pressable>
             ))}
           </ScrollView>
@@ -481,6 +778,17 @@ const createStyles = (theme: Theme) =>
       fontSize: theme.typography.caption.fontSize,
       color: theme.colors.textSecondary,
       lineHeight: 18,
+    },
+    creditSection: {
+      gap: theme.spacing.md,
+      paddingTop: theme.spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    creditSectionTitle: {
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: fontWeight(600),
+      color: theme.colors.textSecondary,
     },
     actions: {
       flexDirection: 'row',

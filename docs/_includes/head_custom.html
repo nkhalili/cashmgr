@@ -1,4 +1,6 @@
 <link id="jtd-dark" rel="stylesheet" href="{{ '/assets/css/just-the-docs-dark.css' | relative_url }}" media="(prefers-color-scheme: dark)">
+
+<!-- Theme toggle -->
 <script>
   (function () {
     var link = document.getElementById('jtd-dark');
@@ -20,9 +22,88 @@
       var dark = isDarkActive();
       link.media = dark ? 'not all' : 'all';
       localStorage.setItem('jtd-theme', dark ? 'light' : 'dark');
-      updateThemeBtn();
+      window.updateThemeBtn();
     };
 
-    document.addEventListener('DOMContentLoaded', updateThemeBtn);
+    document.addEventListener('DOMContentLoaded', window.updateThemeBtn);
   })();
+</script>
+
+<!-- Sidebar heading TOC -->
+<script>
+  window.addEventListener('load', function () {
+    var headings = Array.from(document.querySelectorAll('#main-content h2'));
+    console.log('[TOC] headings found:', headings.length);
+    if (!headings.length) return;
+
+    var activeItem = document.querySelector('.nav-list-item.active');
+    console.log('[TOC] activeItem:', activeItem);
+    if (!activeItem) return;
+
+    function headingText(h) {
+      var clone = h.cloneNode(true);
+      var anchor = clone.querySelector('.anchor-heading');
+      if (anchor) anchor.remove();
+      return clone.textContent.trim();
+    }
+
+    var sampleNavLink = document.querySelector('#site-nav .nav-list-link');
+    var linkColor = sampleNavLink
+      ? window.getComputedStyle(sampleNavLink).color
+      : 'inherit';
+
+    var subList = document.createElement('div');
+    subList.className = 'toc-list';
+
+    headings.forEach(function (h) {
+      if (!h.id) return;
+      var a = document.createElement('a');
+      a.href = '#' + h.id;
+      a.className = 'toc-link';
+      a.textContent = headingText(h);
+      a.style.display = 'block';
+      a.style.padding = '0.18rem 0 0.18rem 2.5rem';
+      a.style.color = linkColor;
+      a.style.opacity = '0.65';
+      a.style.textDecoration = 'none';
+      a.style.whiteSpace = 'nowrap';
+      a.style.overflow = 'hidden';
+      a.style.textOverflow = 'ellipsis';
+      a.addEventListener('mouseenter', function () {
+        this.style.opacity = '1';
+        this.style.textDecoration = 'underline';
+        this.style.filter = 'brightness(1.4)';
+      });
+      a.addEventListener('mouseleave', function () {
+        this.style.opacity = this.classList.contains('toc-active') ? '1' : '0.65';
+        this.style.textDecoration = 'none';
+        this.style.filter = '';
+      });
+      subList.appendChild(a);
+    });
+
+    activeItem.appendChild(subList);
+
+    function setActive(activeLink) {
+      tocLinks.forEach(function (a) {
+        a.classList.remove('toc-active');
+        a.style.opacity = '0.65';
+      });
+      if (activeLink) {
+        activeLink.classList.add('toc-active');
+        activeLink.style.opacity = '1';
+      }
+    }
+
+    var tocLinks = Array.from(subList.querySelectorAll('.toc-link'));
+
+    function syncFromHash() {
+      var hash = window.location.hash;
+      var match = hash ? subList.querySelector('[href="' + hash + '"]') : null;
+      setActive(match || tocLinks[0]);
+    }
+
+    syncFromHash();
+    window.addEventListener('hashchange', syncFromHash);
+  });
 </script>

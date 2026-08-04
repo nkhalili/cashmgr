@@ -239,11 +239,17 @@ export class SqliteDatabaseAdapter implements DatabaseAdapter {
     for (const account of data.accounts ?? []) {
       await this.db.execute(
         `INSERT OR REPLACE INTO accounts
-          (id, name, type, balance, initial_balance, currency, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, name, type, balance, initial_balance, currency,
+           statement_day, payment_day, payment_account_id,
+           auto_payment_enabled, auto_payment_mode, auto_payment_fixed_amount, last_auto_payment_date,
+           created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           account.id, account.name, account.type,
           account.balance, account.initialBalance, account.currency,
+          account.statementDay ?? null, account.paymentDay ?? null, account.paymentAccountId ?? null,
+          account.autoPaymentEnabled ? 1 : 0, account.autoPaymentMode ?? null,
+          account.autoPaymentFixedAmount ?? null, account.lastAutoPaymentDate ?? null,
           account.createdAt, account.updatedAt,
         ],
       );

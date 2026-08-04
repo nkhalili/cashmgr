@@ -5,27 +5,94 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  FlatList,
+  SectionList,
   Alert,
   TextStyle,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { Theme, useTheme } from '@cashmgr/ui';
-import { Account, AppError, formatCurrency } from '@cashmgr/core';
-import { useAccountsService } from '../../src/contexts/services-context';
+import { useSafeRouter } from '../../src/hooks/useSafeRouter';
+import { Account, AppError, Currency, CreditAccountSummary, formatCurrency, ACCOUNT_TYPE_GROUPS as ACCOUNT_GROUPS } from '@cashmgr/core';
+import { useAccountsService, useCurrenciesService, useTransactionsService } from '../../src/contexts/services-context';
+import { useShowCreditBalances } from '../../src/contexts/credit-display-context';
+import { getCreditAccountSummaries } from '../../src/services/credit-account-summary';
+
+function computeSummary(
+  accounts: Account[],
+  currencies: Currency[],
+): { assetsFormatted: string; liabilitiesFormatted: string; netFormatted: string; netIsNegative: boolean } | null {
+  if (accounts.length === 0) return null;
+  const primary = currencies.find((c) => c.isPrimary);
+  const rateMap = new Map(currencies.map((c) => [c.id, c.exchangeRate]));
+  let assets = 0;
+  let liabilities = 0;
+  for (const account of accounts) {
+    const rate = primary ? (rateMap.get(account.currency) ?? 1) : 1;
+    const converted = account.balance * rate;
+    if (converted >= 0) {
+      assets += converted;
+    } else {
+      liabilities += Math.abs(converted);
+    }
+  }
+  const net = assets - liabilities;
+  const displayCurrency = primary?.id ?? accounts[0]!.currency;
+  return {
+    assetsFormatted: formatCurrency(assets, displayCurrency),
+    liabilitiesFormatted: formatCurrency(liabilities, displayCurrency),
+    netFormatted: formatCurrency(net, displayCurrency),
+    netIsNegative: net < 0,
+  };
+}
+
+function getGroupTotal(accounts: Account[], currencies: Currency[]): { formatted: string; isNegative: boolean } {
+  const primary = currencies.find((c) => c.isPrimary);
+  if (!primary) {
+    const totals: Record<string, number> = {};
+    for (const account of accounts) {
+      totals[account.currency] = (totals[account.currency] ?? 0) + account.balance;
+    }
+    return {
+      formatted: Object.entries(totals)
+        .map(([currency, total]) => formatCurrency(total, currency))
+        .join(' + '),
+      isNegative: Object.values(totals).every((v) => v < 0),
+    };
+  }
+  const rateMap = new Map(currencies.map((c) => [c.id, c.exchangeRate]));
+  let total = 0;
+  for (const account of accounts) {
+    total += account.balance * (rateMap.get(account.currency) ?? 1);
+  }
+  return { formatted: formatCurrency(total, primary.id), isNegative: total < 0 };
+}
 
 export default function AccountsScreen() {
   const theme = useTheme();
-  const router = useRouter();
+  const router = useSafeRouter();
   const accountsService = useAccountsService();
+  const currenciesService = useCurrenciesService();
+  const transactionsService = useTransactionsService();
+  const { show: showCreditBalances } = useShowCreditBalances();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 
   const [accounts, setAccounts] = React.useState<Account[]>([]);
+  const [currencies, setCurrencies] = React.useState<Currency[]>([]);
+  const [creditSummaries, setCreditSummaries] = React.useState<Map<string, CreditAccountSummary>>(new Map());
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  const loadCurrencies = React.useCallback(async () => {
+    try {
+      const data = await currenciesService.listCurrencies(true);
+      setCurrencies(data);
+    } catch {
+      // Non-critical: group totals fall back to per-currency display
+    }
+  }, [currenciesService]);
 
   const loadAccounts = React.useCallback(async () => {
     setIsLoading(true);
@@ -44,25 +111,46 @@ export default function AccountsScreen() {
   const handleRefresh = React.useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const data = await accountsService.listAccounts();
-      setAccounts(data);
-    } catch (err) {
+      const [accountsData, currenciesData] = await Promise.all([
+        accountsService.listAccounts(),
+        currenciesService.listCurrencies(true),
+      ]);
+      setAccounts(accountsData);
+      setCurrencies(currenciesData);
+    } catch {
       // Silent fail on refresh - data is already loaded
     } finally {
       setIsRefreshing(false);
     }
-  }, [accountsService]);
+  }, [accountsService, currenciesService]);
 
   React.useEffect(() => {
     void loadAccounts();
-  }, [loadAccounts]);
+    void loadCurrencies();
+  }, [loadAccounts, loadCurrencies]);
 
   // Refresh when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       void loadAccounts();
-    }, [loadAccounts])
+      void loadCurrencies();
+    }, [loadAccounts, loadCurrencies])
   );
+
+  // Load Balance Payable / Outstanding Balance for credit accounts
+  React.useEffect(() => {
+    if (!showCreditBalances) {
+      setCreditSummaries(new Map());
+      return;
+    }
+    let cancelled = false;
+    void getCreditAccountSummaries(transactionsService, accounts).then((summaries) => {
+      if (!cancelled) setCreditSummaries(summaries);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accounts, showCreditBalances, transactionsService]);
 
   const handleDelete = React.useCallback(
     async (account: Account) => {
@@ -136,28 +224,64 @@ export default function AccountsScreen() {
     }
   }, [accountsService, loadAccounts]);
 
-  const renderAccount = ({ item }: { item: Account }) => (
-    <TouchableOpacity
-      style={styles.accountCard}
-      onPress={() => handleAccountTap(item)}
-      onLongPress={() => handleAccountActions(item)}
-      delayLongPress={500}
-    >
-      <View style={styles.accountInfo}>
-        <Text style={styles.accountName}>{item.name}</Text>
-        <Text style={styles.accountType}>
-          {item.type.charAt(0).toUpperCase() + item.type.slice(1)} • {item.currency}
-        </Text>
-      </View>
-      <Text style={styles.accountBalance}>{formatCurrency(item.balance, item.currency)}</Text>
+  const summary = React.useMemo(() => computeSummary(accounts, currencies), [accounts, currencies]);
+
+  const sections = React.useMemo(
+    () =>
+      ACCOUNT_GROUPS.flatMap((group) => {
+        const data = accounts.filter((a) => a.type === group.type);
+        if (data.length === 0) return [];
+        const groupTotal = getGroupTotal(data, currencies);
+        return [{ type: group.type, label: group.label, total: groupTotal.formatted, isNegative: groupTotal.isNegative, data }];
+      }),
+    [accounts, currencies]
+  );
+
+  const renderAccount = ({ item }: { item: Account }) => {
+    const summary = item.type === 'credit' ? creditSummaries.get(item.id) : undefined;
+    return (
       <TouchableOpacity
-        style={styles.moreButton}
-        onPress={() => handleAccountActions(item)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={styles.accountCard}
+        onPress={() => handleAccountTap(item)}
+        onLongPress={() => handleAccountActions(item)}
+        delayLongPress={500}
       >
-        <Text style={styles.moreButtonText}>⋯</Text>
+        <View style={styles.accountInfo}>
+          <Text style={styles.accountName}>{item.name}</Text>
+          <Text style={styles.accountType}>{item.currency}</Text>
+          {summary && (
+            <>
+              <Text style={styles.accountType}>
+                Outstanding: {formatCurrency(summary.outstandingBalance, item.currency)}
+              </Text>
+              {summary.balancePayable != null && (
+                <Text style={styles.accountType}>
+                  Payable{summary.nextPaymentDueDate ? ` by ${summary.nextPaymentDueDate}` : ''}:{' '}
+                  {formatCurrency(summary.balancePayable, item.currency)}
+                </Text>
+              )}
+            </>
+          )}
+        </View>
+        <Text style={[styles.accountBalance, item.balance < 0 && styles.accountBalanceNegative]}>{formatCurrency(item.balance, item.currency)}</Text>
+        <TouchableOpacity
+          style={styles.moreButton}
+          onPress={() => handleAccountActions(item)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={styles.moreButtonText}>⋯</Text>
+        </TouchableOpacity>
       </TouchableOpacity>
-    </TouchableOpacity>
+    );
+  };
+
+  const renderSectionHeader = ({ section }: { section: { label: string; total: string; isNegative: boolean } }) => (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionHeaderLabel}>{section.label}</Text>
+      <Text style={[styles.sectionHeaderTotal, section.isNegative && styles.sectionHeaderTotalNegative]}>
+        {section.total}
+      </Text>
+    </View>
   );
 
   const renderEmpty = () => (
@@ -175,6 +299,28 @@ export default function AccountsScreen() {
     </View>
   );
 
+  const renderSummary = () => {
+    if (!summary) return null;
+    return (
+      <View style={styles.summaryCard}>
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>Assets</Text>
+          <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{summary.assetsFormatted}</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>Liabilities</Text>
+          <Text style={[styles.summaryValue, styles.summaryValueDanger]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{summary.liabilitiesFormatted}</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>Net</Text>
+          <Text style={[styles.summaryValue, summary.netIsNegative ? styles.summaryValueDanger : styles.summaryValueSuccess]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{summary.netFormatted}</Text>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {error && (
@@ -183,29 +329,34 @@ export default function AccountsScreen() {
         </View>
       )}
 
-      <TouchableOpacity style={styles.addButton} onPress={() => router.push('/add-account')}>
-        <Text style={styles.addButtonText}>Add Account</Text>
-      </TouchableOpacity>
-
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Loading accounts...</Text>
         </View>
       ) : accounts.length > 0 ? (
-        <FlatList
-          data={accounts}
-          renderItem={renderAccount}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={theme.colors.primary}
-            />
-          }
-        />
+        <>
+          {renderSummary()}
+          <SectionList
+            style={{ flex: 1 }}
+            sections={sections}
+            keyExtractor={(item) => item.id}
+            renderItem={renderAccount}
+            renderSectionHeader={renderSectionHeader}
+            contentContainerStyle={styles.listContent}
+            stickySectionHeadersEnabled={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                tintColor={theme.colors.primary}
+              />
+            }
+          />
+          <TouchableOpacity style={styles.addButton} onPress={() => router.push('/add-account')}>
+            <Text style={styles.addButtonText}>Add Account</Text>
+          </TouchableOpacity>
+        </>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>{renderEmpty()}</ScrollView>
       )}
@@ -230,13 +381,47 @@ const createStyles = (theme: Theme) =>
       padding: theme.spacing.lg,
       gap: theme.spacing.md,
     },
+    summaryCard: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      alignItems: 'center',
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+    },
+    summaryItem: {
+      alignItems: 'center',
+      flex: 1,
+    },
+    summaryDivider: {
+      width: 1,
+      height: 36,
+      backgroundColor: theme.colors.border,
+    },
+    summaryLabel: {
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xs,
+    },
+    summaryValue: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: fontWeight(700),
+      color: theme.colors.textPrimary,
+    },
+    summaryValueDanger: {
+      color: theme.colors.danger,
+    },
+    summaryValueSuccess: {
+      color: theme.colors.success,
+    },
     addButton: {
       backgroundColor: theme.colors.primary,
-      paddingVertical: theme.spacing.md,
-      borderRadius: theme.radii.md,
+      padding: theme.spacing.md,
+      margin: theme.spacing.md,
+      borderRadius: theme.components.interactiveRadius,
       alignItems: 'center',
-      margin: theme.spacing.lg,
-      marginBottom: theme.spacing.md,
     },
     addButtonText: {
       color: '#ffffff',
@@ -294,6 +479,9 @@ const createStyles = (theme: Theme) =>
       fontWeight: fontWeight(600),
       color: theme.colors.textPrimary,
     },
+    accountBalanceNegative: {
+      color: theme.colors.danger,
+    },
     emptyCard: {
       backgroundColor: theme.colors.surface,
       borderRadius: theme.radii.lg,
@@ -341,5 +529,29 @@ const createStyles = (theme: Theme) =>
       fontSize: 20,
       color: theme.colors.textSecondary,
       fontWeight: fontWeight(700),
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.xs,
+      marginBottom: theme.spacing.xs,
+      marginTop: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    sectionHeaderLabel: {
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: fontWeight(theme.typography.h3.fontWeight),
+      color: theme.colors.textPrimary,
+    },
+    sectionHeaderTotal: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: fontWeight(600),
+      color: theme.colors.textPrimary,
+    },
+    sectionHeaderTotalNegative: {
+      color: theme.colors.danger,
     },
   });

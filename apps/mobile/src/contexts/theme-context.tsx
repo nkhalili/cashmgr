@@ -1,6 +1,7 @@
 import React from 'react';
 import { Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getLogger } from '@cashmgr/core';
 import { ThemeProvider as UIThemeProvider, ThemeMode, AccentColor } from '@cashmgr/ui';
 
 const THEME_STORAGE_KEY = 'cashmgr-theme-preference';
@@ -63,14 +64,14 @@ export function ThemePreferenceProvider({ children }: { children: React.ReactNod
   const setPreference = React.useCallback((pref: ThemePreference) => {
     setPreferenceState(pref);
     AsyncStorage.setItem(THEME_STORAGE_KEY, pref).catch((err) => {
-      console.warn('Failed to save theme preference:', err);
+      getLogger().warn('Failed to save theme preference', { error: err });
     });
   }, []);
 
   const setAccent = React.useCallback((a: AccentColor) => {
     setAccentState(a);
     AsyncStorage.setItem(ACCENT_STORAGE_KEY, a).catch((err) => {
-      console.warn('Failed to save accent color:', err);
+      getLogger().warn('Failed to save accent color', { error: err });
     });
   }, []);
 

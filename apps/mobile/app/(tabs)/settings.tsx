@@ -7,11 +7,12 @@ import {
   TextStyle,
   TouchableOpacity,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Theme, useTheme } from '@cashmgr/ui';
 import { useCurrenciesService } from '../../src/contexts/services-context';
 import { useThemePreference } from '../../src/contexts/theme-context';
+import { useSafeRouter } from '../../src/hooks/useSafeRouter';
 
 const THEME_LABELS: Record<string, string> = {
   system: 'System',
@@ -33,7 +34,7 @@ interface SettingsGroup {
 
 export default function SettingsScreen() {
   const theme = useTheme();
-  const router = useRouter();
+  const router = useSafeRouter();
   const currenciesService = useCurrenciesService();
   const { preference } = useThemePreference();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
@@ -106,6 +107,12 @@ export default function SettingsScreen() {
           subtitle: 'Export & import CSV',
           route: '/settings-csv',
           icon: 'document-text-outline',
+        },
+        {
+          label: 'Logs',
+          subtitle: 'Share the local error log',
+          route: '/settings-logs',
+          icon: 'bug-outline',
         },
       ],
     },

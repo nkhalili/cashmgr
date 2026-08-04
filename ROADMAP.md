@@ -16,7 +16,9 @@ CashMgr is a local-first personal finance app. The local version is free, ad-fre
 | Web SQLite WASM + OPFS | Replaced sql.js + IndexedDB; full-speed local SQLite in the browser |
 | Data Export / Import | Available in JSON and CSV to be used for restore or migration purposes |
 | Budgets | Monthly spending limits per expense category with green → yellow → red progress tracking |
-| Recurring Transactions | 10 frequencies (daily through annually); on-startup generation; manage via Settings |
+| Recurring Transactions | 10 frequencies (daily through annually); on-startup generation; enable/edit from Add or Edit Transaction, manage via Settings |
+| Credit Card Statement & Auto-Pay | Statement/payment day, Balance Payable & Outstanding Balance on Accounts page, optional auto-pay (full or fixed amount) from a linked account |
+| Local Error Logging | Per-platform local file logger with global error/rejection capture; shareable from Settings → Logs. Local-only by design — no remote crash reporting |
 
 ---
 

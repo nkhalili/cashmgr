@@ -1,9 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, EmptyState, Input, ListItem, useTheme } from '@cashmgr/ui';
-import { Account, AccountType, AppError, ErrorHandler, CreateAccountInputSchema, DEFAULT_CURRENCY, formatCurrency, Currency } from '@cashmgr/core';
-import { useAccountsService, useCurrenciesService } from '../services/services-context';
+import { Button, Card, EmptyState, Input, ListItem, Switch, useTheme, Theme } from '@cashmgr/ui';
+import { Account, AccountType, AppError, ErrorHandler, CreateAccountInputSchema, DEFAULT_CURRENCY, formatCurrency, Currency, CreditAccountSummary, ACCOUNT_TYPE_GROUPS as ACCOUNT_GROUPS } from '@cashmgr/core';
+import { useAccountsService, useCurrenciesService, useTransactionsService } from '../services/services-context';
 import { useFormValidation } from '../hooks/useFormValidation';
+import { useShowCreditBalances } from '../contexts/credit-display-context';
+import { getCreditAccountSummaries } from '../services/credit-account-summary';
 
 const ACCOUNT_TYPE_OPTIONS: { label: string; value: AccountType }[] = [
   { label: 'Cash on hand', value: 'cash' },
@@ -11,12 +13,216 @@ const ACCOUNT_TYPE_OPTIONS: { label: string; value: AccountType }[] = [
   { label: 'Credit', value: 'credit' },
 ];
 
+const DAY_OF_MONTH_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
+
+function fieldLabelStyle(theme: Theme): React.CSSProperties {
+  return {
+    fontFamily: theme.fontFamily,
+    fontSize: theme.typography.caption.fontSize,
+    color: theme.colors.textSecondary,
+    fontWeight: 500,
+  };
+}
+
+function selectStyle(theme: Theme): React.CSSProperties {
+  return {
+    height: theme.components.inputHeight,
+    borderRadius: theme.components.interactiveRadius,
+    border: `1px solid ${theme.colors.border}`,
+    fontFamily: theme.fontFamily,
+    fontSize: theme.typography.body.fontSize,
+    padding: `0 ${theme.spacing.sm}px`,
+    background: theme.colors.surface,
+    color: theme.colors.textPrimary,
+  };
+}
+
+interface CreditFieldsState {
+  statementDay: string;
+  setStatementDay: (value: string) => void;
+  paymentDay: string;
+  setPaymentDay: (value: string) => void;
+  paymentAccountId: string;
+  setPaymentAccountId: (value: string) => void;
+  autoPaymentEnabled: boolean;
+  setAutoPaymentEnabled: (value: boolean) => void;
+  autoPaymentMode: 'full' | 'fixed';
+  setAutoPaymentMode: (value: 'full' | 'fixed') => void;
+  autoPaymentFixedAmount: string;
+  setAutoPaymentFixedAmount: (value: string) => void;
+}
+
+function CreditFieldsSection({
+  theme,
+  otherAccounts,
+  fields,
+}: {
+  theme: Theme;
+  otherAccounts: Account[];
+  fields: CreditFieldsState;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: theme.spacing.md,
+        paddingTop: theme.spacing.sm,
+        borderTop: `1px solid ${theme.colors.border}`,
+      }}
+    >
+      <span style={{ fontSize: theme.typography.caption.fontSize, fontWeight: 600, color: theme.colors.textSecondary }}>
+        Credit card settings
+      </span>
+      <div style={{ display: 'flex', gap: theme.spacing.md }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: theme.spacing.xs }}>
+          <label style={fieldLabelStyle(theme)}>Statement day</label>
+          <select
+            value={fields.statementDay}
+            onChange={(e) => fields.setStatementDay(e.target.value)}
+            style={selectStyle(theme)}
+          >
+            <option value="">Not set</option>
+            {DAY_OF_MONTH_OPTIONS.map((day) => (
+              <option key={day} value={day}>{day}</option>
+            ))}
+          </select>
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: theme.spacing.xs }}>
+          <label style={fieldLabelStyle(theme)}>Payment due day</label>
+          <select
+            value={fields.paymentDay}
+            onChange={(e) => fields.setPaymentDay(e.target.value)}
+            style={selectStyle(theme)}
+          >
+            <option value="">Not set</option>
+            {DAY_OF_MONTH_OPTIONS.map((day) => (
+              <option key={day} value={day}>{day}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.xs }}>
+        <label style={fieldLabelStyle(theme)}>Payment account</label>
+        <select
+          value={fields.paymentAccountId}
+          onChange={(e) => fields.setPaymentAccountId(e.target.value)}
+          style={selectStyle(theme)}
+        >
+          <option value="">Select an account</option>
+          {otherAccounts.map((account) => (
+            <option key={account.id} value={account.id}>{account.name}</option>
+          ))}
+        </select>
+      </div>
+      <Switch
+        value={fields.autoPaymentEnabled}
+        onChange={fields.setAutoPaymentEnabled}
+        label="Auto payment"
+        helperText="Automatically pay from the payment account on the due date"
+      />
+      {fields.autoPaymentEnabled && (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.xs }}>
+            <label style={fieldLabelStyle(theme)}>Amount to pay</label>
+            <select
+              value={fields.autoPaymentMode}
+              onChange={(e) => fields.setAutoPaymentMode(e.target.value as 'full' | 'fixed')}
+              style={selectStyle(theme)}
+            >
+              <option value="full">Full balance payable</option>
+              <option value="fixed">Fixed amount</option>
+            </select>
+          </div>
+          {fields.autoPaymentMode === 'fixed' && (
+            <Input
+              label="Fixed payment amount"
+              type="number"
+              placeholder="10.00"
+              value={fields.autoPaymentFixedAmount}
+              onChange={fields.setAutoPaymentFixedAmount}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function computeSummary(
+  accounts: Account[],
+  currencies: Currency[],
+): { assetsFormatted: string; liabilitiesFormatted: string; netFormatted: string; netIsNegative: boolean } | null {
+  if (accounts.length === 0) return null;
+  const primary = currencies.find((c) => c.isPrimary);
+  const rateMap = new Map(currencies.map((c) => [c.id, c.exchangeRate]));
+  let assets = 0;
+  let liabilities = 0;
+  for (const account of accounts) {
+    const rate = primary ? (rateMap.get(account.currency) ?? 1) : 1;
+    const converted = account.balance * rate;
+    if (converted >= 0) {
+      assets += converted;
+    } else {
+      liabilities += Math.abs(converted);
+    }
+  }
+  const net = assets - liabilities;
+  const displayCurrency = primary?.id ?? accounts[0]!.currency;
+  return {
+    assetsFormatted: formatCurrency(assets, displayCurrency),
+    liabilitiesFormatted: formatCurrency(liabilities, displayCurrency),
+    netFormatted: formatCurrency(net, displayCurrency),
+    netIsNegative: net < 0,
+  };
+}
+
+function renderAccountSubtitle(account: Account, summary: CreditAccountSummary | undefined): React.ReactNode {
+  if (account.type !== 'credit' || !summary) return account.currency;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span>{account.currency}</span>
+      <span>Outstanding: {formatCurrency(summary.outstandingBalance, account.currency)}</span>
+      {summary.balancePayable != null && (
+        <span>
+          Payable{summary.nextPaymentDueDate ? ` by ${summary.nextPaymentDueDate}` : ''}: {formatCurrency(summary.balancePayable, account.currency)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function getGroupTotal(accounts: Account[], currencies: Currency[]): { formatted: string; isNegative: boolean } {
+  const primary = currencies.find((c) => c.isPrimary);
+  if (!primary) {
+    const totals: Record<string, number> = {};
+    for (const account of accounts) {
+      totals[account.currency] = (totals[account.currency] ?? 0) + account.balance;
+    }
+    return {
+      formatted: Object.entries(totals)
+        .map(([currency, total]) => formatCurrency(total, currency))
+        .join(' + '),
+      isNegative: Object.values(totals).every((v) => v < 0),
+    };
+  }
+  const rateMap = new Map(currencies.map((c) => [c.id, c.exchangeRate]));
+  let total = 0;
+  for (const account of accounts) {
+    total += account.balance * (rateMap.get(account.currency) ?? 1);
+  }
+  return { formatted: formatCurrency(total, primary.id), isNegative: total < 0 };
+}
+
 export function Accounts() {
   const theme = useTheme();
   const navigate = useNavigate();
   const accountsService = useAccountsService();
   const currenciesService = useCurrenciesService();
+  const transactionsService = useTransactionsService();
+  const { show: showCreditBalances } = useShowCreditBalances();
   const [accounts, setAccounts] = React.useState<Account[]>([]);
+  const [creditSummaries, setCreditSummaries] = React.useState<Map<string, CreditAccountSummary>>(new Map());
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -24,6 +230,15 @@ export function Accounts() {
   const [name, setName] = React.useState('');
   const [accountType, setAccountType] = React.useState<AccountType>('cash');
   const [initialBalance, setInitialBalance] = React.useState('');
+  const [owesBalance, setOwesBalance] = React.useState(false);
+
+  // Credit card settings state (add form)
+  const [statementDay, setStatementDay] = React.useState('');
+  const [paymentDay, setPaymentDay] = React.useState('');
+  const [paymentAccountId, setPaymentAccountId] = React.useState('');
+  const [autoPaymentEnabled, setAutoPaymentEnabled] = React.useState(false);
+  const [autoPaymentMode, setAutoPaymentMode] = React.useState<'full' | 'fixed'>('full');
+  const [autoPaymentFixedAmount, setAutoPaymentFixedAmount] = React.useState('');
 
   // F-030: Currency state
   const [currencies, setCurrencies] = React.useState<Currency[]>([]);
@@ -35,13 +250,46 @@ export function Accounts() {
   const [editType, setEditType] = React.useState<AccountType>('cash');
   const [isEditSubmitting, setIsEditSubmitting] = React.useState(false);
 
+  // Credit card settings state (edit form)
+  const [editStatementDay, setEditStatementDay] = React.useState('');
+  const [editPaymentDay, setEditPaymentDay] = React.useState('');
+  const [editPaymentAccountId, setEditPaymentAccountId] = React.useState('');
+  const [editAutoPaymentEnabled, setEditAutoPaymentEnabled] = React.useState(false);
+  const [editAutoPaymentMode, setEditAutoPaymentMode] = React.useState<'full' | 'fixed'>('full');
+  const [editAutoPaymentFixedAmount, setEditAutoPaymentFixedAmount] = React.useState('');
+
   // F-026: Helper to get current form values for validation
-  const getFormValues = React.useCallback(() => ({
-    name: name.trim(),
-    type: accountType,
-    initialBalance: initialBalance.trim() ? Number(initialBalance) : 0,
-    currency: selectedCurrency,
-  }), [name, accountType, initialBalance, selectedCurrency]);
+  const getFormValues = React.useCallback(() => {
+    const raw = initialBalance.trim() ? Math.abs(Number(initialBalance)) : 0;
+    const parsed = Number.isFinite(raw) ? raw : 0;
+    const isCredit = accountType === 'credit';
+    return {
+      name: name.trim(),
+      type: accountType,
+      initialBalance: isCredit && owesBalance ? -parsed : parsed,
+      currency: selectedCurrency,
+      autoPaymentEnabled: isCredit && autoPaymentEnabled,
+      ...(isCredit && statementDay ? { statementDay: Number(statementDay) } : {}),
+      ...(isCredit && paymentDay ? { paymentDay: Number(paymentDay) } : {}),
+      ...(isCredit && paymentAccountId ? { paymentAccountId } : {}),
+      ...(isCredit && autoPaymentEnabled ? { autoPaymentMode } : {}),
+      ...(isCredit && autoPaymentEnabled && autoPaymentMode === 'fixed' && autoPaymentFixedAmount
+        ? { autoPaymentFixedAmount: Number(autoPaymentFixedAmount) }
+        : {}),
+    };
+  }, [
+    name,
+    accountType,
+    initialBalance,
+    owesBalance,
+    selectedCurrency,
+    statementDay,
+    paymentDay,
+    paymentAccountId,
+    autoPaymentEnabled,
+    autoPaymentMode,
+    autoPaymentFixedAmount,
+  ]);
 
   // F-026: Client-side form validation for create
   const { errors, validateField, validateAll, clearErrors, isValid } = useFormValidation(
@@ -76,6 +324,21 @@ export function Accounts() {
     void loadAccounts();
   }, [loadAccounts]);
 
+  // Load Balance Payable / Outstanding Balance for credit accounts
+  React.useEffect(() => {
+    if (!showCreditBalances) {
+      setCreditSummaries(new Map());
+      return;
+    }
+    let cancelled = false;
+    void getCreditAccountSummaries(transactionsService, accounts).then((summaries) => {
+      if (!cancelled) setCreditSummaries(summaries);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accounts, showCreditBalances, transactionsService]);
+
   // F-030: Load currencies on mount
   const loadCurrencies = React.useCallback(async () => {
     try {
@@ -100,6 +363,13 @@ export function Accounts() {
     setName('');
     setAccountType('cash');
     setInitialBalance('');
+    setOwesBalance(false);
+    setStatementDay('');
+    setPaymentDay('');
+    setPaymentAccountId('');
+    setAutoPaymentEnabled(false);
+    setAutoPaymentMode('full');
+    setAutoPaymentFixedAmount('');
     // F-030: Reset to primary currency
     const primary = currencies.find(c => c.isPrimary);
     setSelectedCurrency(primary?.id || DEFAULT_CURRENCY);
@@ -157,22 +427,55 @@ export function Accounts() {
     setEditingAccount(account);
     setEditName(account.name);
     setEditType(account.type);
+    setEditStatementDay(account.statementDay != null ? String(account.statementDay) : '');
+    setEditPaymentDay(account.paymentDay != null ? String(account.paymentDay) : '');
+    setEditPaymentAccountId(account.paymentAccountId ?? '');
+    setEditAutoPaymentEnabled(account.autoPaymentEnabled);
+    setEditAutoPaymentMode(account.autoPaymentMode ?? 'full');
+    setEditAutoPaymentFixedAmount(account.autoPaymentFixedAmount != null ? String(account.autoPaymentFixedAmount) : '');
     clearEditErrors();
   }, [clearEditErrors]);
 
   // F-027: Helper to get edit form values
-  const getEditFormValues = React.useCallback(() => ({
-    name: editName.trim(),
-    type: editType,
-    initialBalance: editingAccount?.initialBalance ?? 0,
-    currency: editingAccount?.currency ?? DEFAULT_CURRENCY,
-  }), [editName, editType, editingAccount]);
+  const getEditFormValues = React.useCallback(() => {
+    const isCredit = editType === 'credit';
+    return {
+      name: editName.trim(),
+      type: editType,
+      initialBalance: editingAccount?.initialBalance ?? 0,
+      currency: editingAccount?.currency ?? DEFAULT_CURRENCY,
+      autoPaymentEnabled: isCredit && editAutoPaymentEnabled,
+      ...(isCredit && editStatementDay ? { statementDay: Number(editStatementDay) } : {}),
+      ...(isCredit && editPaymentDay ? { paymentDay: Number(editPaymentDay) } : {}),
+      ...(isCredit && editPaymentAccountId ? { paymentAccountId: editPaymentAccountId } : {}),
+      ...(isCredit && editAutoPaymentEnabled ? { autoPaymentMode: editAutoPaymentMode } : {}),
+      ...(isCredit && editAutoPaymentEnabled && editAutoPaymentMode === 'fixed' && editAutoPaymentFixedAmount
+        ? { autoPaymentFixedAmount: Number(editAutoPaymentFixedAmount) }
+        : {}),
+    };
+  }, [
+    editName,
+    editType,
+    editingAccount,
+    editStatementDay,
+    editPaymentDay,
+    editPaymentAccountId,
+    editAutoPaymentEnabled,
+    editAutoPaymentMode,
+    editAutoPaymentFixedAmount,
+  ]);
 
   // F-027: Cancel edit
   const handleCancelEdit = React.useCallback(() => {
     setEditingAccount(null);
     setEditName('');
     setEditType('cash');
+    setEditStatementDay('');
+    setEditPaymentDay('');
+    setEditPaymentAccountId('');
+    setEditAutoPaymentEnabled(false);
+    setEditAutoPaymentMode('full');
+    setEditAutoPaymentFixedAmount('');
     clearEditErrors();
   }, [clearEditErrors]);
 
@@ -196,6 +499,12 @@ export function Accounts() {
         await accountsService.updateAccount(editingAccount.id, {
           name: formValues.name,
           type: formValues.type,
+          statementDay: formValues.statementDay,
+          paymentDay: formValues.paymentDay,
+          paymentAccountId: formValues.paymentAccountId,
+          autoPaymentEnabled: formValues.autoPaymentEnabled,
+          autoPaymentMode: formValues.autoPaymentMode,
+          autoPaymentFixedAmount: formValues.autoPaymentFixedAmount,
         });
         handleCancelEdit();
         await loadAccounts();
@@ -232,6 +541,7 @@ export function Accounts() {
   );
 
   const hasAccounts = accounts.length > 0;
+  const summary = React.useMemo(() => computeSummary(accounts, currencies), [accounts, currencies]);
 
   return (
     <div
@@ -276,35 +586,102 @@ export function Accounts() {
         </div>
       )}
 
-      <Card title="Account overview" subtitle="Organise institutions and balances" tone="default">
-        {isLoading ? (
+      {isLoading ? (
+        <Card tone="default">
           <p style={{ margin: 0, color: theme.colors.textSecondary }}>Loading accounts...</p>
-        ) : hasAccounts ? (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {accounts.map((account, index) => (
-              <ListItem
-                key={account.id}
-                title={account.name}
-                subtitle={`${account.type.charAt(0).toUpperCase()}${account.type.slice(1)} • ${account.currency}`}
-                value={formatCurrency(account.balance, account.currency)}
-                badgeLabel={account.type === 'cash' ? 'Daily' : account.type === 'bank' ? 'Recurring' : 'Credit'}
-                badgeTone={account.type === 'credit' ? 'danger' : 'accent'}
-                showDivider={index !== accounts.length - 1}
-                onPress={() => navigate(`/transactions?accountId=${account.id}`)}
-                actions={
-                  <div style={{ display: 'flex', gap: theme.spacing.xs }}>
-                    <Button type="button" variant="ghost" onClick={() => handleEdit(account)}>
-                      Edit
-                    </Button>
-                    <Button type="button" variant="ghost" onClick={() => handleDelete(account)}>
-                      Delete
-                    </Button>
-                  </div>
-                }
-              />
-            ))}
-          </div>
-        ) : (
+        </Card>
+      ) : hasAccounts ? (
+        <>
+          {summary && (
+            <Card tone="default">
+              <div style={{ display: 'flex', justifyContent: 'space-around', gap: theme.spacing.md }}>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ margin: 0, marginBottom: theme.spacing.xs, fontSize: theme.typography.caption.fontSize, color: theme.colors.textSecondary }}>Assets</p>
+                  <p style={{ margin: 0, fontSize: theme.typography.h2.fontSize, fontWeight: theme.typography.h2.fontWeight, color: theme.colors.textPrimary }}>{summary.assetsFormatted}</p>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ margin: 0, marginBottom: theme.spacing.xs, fontSize: theme.typography.caption.fontSize, color: theme.colors.textSecondary }}>Liabilities</p>
+                  <p style={{ margin: 0, fontSize: theme.typography.h2.fontSize, fontWeight: theme.typography.h2.fontWeight, color: theme.colors.danger }}>{summary.liabilitiesFormatted}</p>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ margin: 0, marginBottom: theme.spacing.xs, fontSize: theme.typography.caption.fontSize, color: theme.colors.textSecondary }}>Net</p>
+                  <p style={{ margin: 0, fontSize: theme.typography.h2.fontSize, fontWeight: theme.typography.h2.fontWeight, color: summary.netIsNegative ? theme.colors.danger : theme.colors.success }}>{summary.netFormatted}</p>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {ACCOUNT_GROUPS.map((group) => {
+            const groupAccounts = accounts.filter((a) => a.type === group.type);
+            if (groupAccounts.length === 0) return null;
+            const groupTotal = getGroupTotal(groupAccounts, currencies);
+            return (
+              <Card
+                key={group.type}
+                tone="default"
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    marginBottom: theme.spacing.md,
+                    paddingBottom: theme.spacing.sm,
+                    borderBottom: `1px solid ${theme.colors.border}`,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: theme.typography.h3.fontSize,
+                      fontWeight: theme.typography.h3.fontWeight,
+                      color: theme.colors.textPrimary,
+                    }}
+                  >
+                    {group.label}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: theme.typography.body.fontSize,
+                      fontWeight: 600,
+                      color: groupTotal.isNegative ? theme.colors.danger : theme.colors.textPrimary,
+                    }}
+                  >
+                    {groupTotal.formatted}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {groupAccounts.map((account, index) => (
+                    <ListItem
+                      key={account.id}
+                      title={account.name}
+                      subtitle={renderAccountSubtitle(account, creditSummaries.get(account.id))}
+                      value={
+                      <span style={{ color: account.balance < 0 ? theme.colors.danger : theme.colors.textPrimary }}>
+                        {formatCurrency(account.balance, account.currency)}
+                      </span>
+                    }
+                      showDivider={index !== groupAccounts.length - 1}
+                      onPress={() => navigate(`/transactions?accountId=${account.id}`)}
+                      actions={
+                        <div style={{ display: 'flex', gap: theme.spacing.xs }}>
+                          <Button type="button" variant="ghost" onClick={() => handleEdit(account)}>
+                            Edit
+                          </Button>
+                          <Button type="button" variant="ghost" onClick={() => handleDelete(account)}>
+                            Delete
+                          </Button>
+                        </div>
+                      }
+                    />
+                  ))}
+                </div>
+              </Card>
+            );
+          })}
+
+        </>
+      ) : (
+        <Card tone="default">
           <EmptyState
             title="No accounts added"
             description="Accounts help you track balances, categorise inflows, and surface insights. Add one to begin, or use the template to get started quickly."
@@ -315,8 +692,8 @@ export function Accounts() {
             }
             secondaryAction={<Button type="button" variant="ghost" onClick={handleUseTemplate}>Use template</Button>}
           />
-        )}
-      </Card>
+        </Card>
+      )}
 
       {/* Add Account Modal */}
       {showAddModal && (
@@ -384,7 +761,11 @@ export function Accounts() {
                   </label>
                   <select
                     value={accountType}
-                    onChange={(event) => setAccountType(event.target.value as AccountType)}
+                    onChange={(event) => {
+                      const value = event.target.value as AccountType;
+                      setAccountType(value);
+                      if (value !== 'credit') setOwesBalance(false);
+                    }}
                     style={{
                       height: theme.components.inputHeight,
                       borderRadius: theme.components.interactiveRadius,
@@ -453,6 +834,58 @@ export function Accounts() {
                   onBlur={() => validateField('initialBalance', getFormValues())}
                   error={errors.initialBalance}
                 />
+                {accountType === 'credit' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.xs }}>
+                    <label
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: theme.spacing.sm,
+                        cursor: 'pointer',
+                        fontFamily: theme.fontFamily,
+                        fontSize: theme.typography.body.fontSize,
+                        color: theme.colors.textPrimary,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={owesBalance}
+                        onChange={(e) => setOwesBalance(e.target.checked)}
+                        style={{ width: 16, height: 16, cursor: 'pointer' }}
+                      />
+                      I currently owe this balance
+                    </label>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: theme.typography.caption.fontSize,
+                        color: theme.colors.textSecondary,
+                      }}
+                    >
+                      Enter your current balance. Check the box if it is an amount you owe — it will be recorded as a negative balance.
+                    </p>
+                  </div>
+                )}
+                {accountType === 'credit' && (
+                  <CreditFieldsSection
+                    theme={theme}
+                    otherAccounts={accounts}
+                    fields={{
+                      statementDay,
+                      setStatementDay,
+                      paymentDay,
+                      setPaymentDay,
+                      paymentAccountId,
+                      setPaymentAccountId,
+                      autoPaymentEnabled,
+                      setAutoPaymentEnabled,
+                      autoPaymentMode,
+                      setAutoPaymentMode,
+                      autoPaymentFixedAmount,
+                      setAutoPaymentFixedAmount,
+                    }}
+                  />
+                )}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: theme.spacing.sm }}>
                   <Button
                     type="button"
@@ -566,6 +999,26 @@ export function Accounts() {
                 >
                   Note: Initial balance cannot be edited. Current balance: {formatCurrency(editingAccount.balance, editingAccount.currency)}
                 </div>
+                {editType === 'credit' && (
+                  <CreditFieldsSection
+                    theme={theme}
+                    otherAccounts={accounts.filter((a) => a.id !== editingAccount.id)}
+                    fields={{
+                      statementDay: editStatementDay,
+                      setStatementDay: setEditStatementDay,
+                      paymentDay: editPaymentDay,
+                      setPaymentDay: setEditPaymentDay,
+                      paymentAccountId: editPaymentAccountId,
+                      setPaymentAccountId: setEditPaymentAccountId,
+                      autoPaymentEnabled: editAutoPaymentEnabled,
+                      setAutoPaymentEnabled: setEditAutoPaymentEnabled,
+                      autoPaymentMode: editAutoPaymentMode,
+                      setAutoPaymentMode: setEditAutoPaymentMode,
+                      autoPaymentFixedAmount: editAutoPaymentFixedAmount,
+                      setAutoPaymentFixedAmount: setEditAutoPaymentFixedAmount,
+                    }}
+                  />
+                )}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: theme.spacing.sm }}>
                   <Button type="button" variant="ghost" onClick={handleCancelEdit} disabled={isEditSubmitting}>
                     Cancel

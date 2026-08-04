@@ -46,6 +46,7 @@ export class TransactionsAggregation {
       categoryName: string;
       categoryIcon: string | null;
       categoryColor: string | null;
+      parentId: string | null;
       total: number;
       count: number;
     };
@@ -57,12 +58,13 @@ export class TransactionsAggregation {
           c.name as categoryName,
           c.icon as categoryIcon,
           c.color as categoryColor,
+          c.parent_id as parentId,
           SUM(t.amount) as total,
           COUNT(t.id) as count
         FROM transactions t
         JOIN categories c ON t.category_id = c.id
         ${whereClause}
-        GROUP BY c.id, c.name, c.icon, c.color
+        GROUP BY c.id, c.name, c.icon, c.color, c.parent_id
         ORDER BY total DESC;
       `,
       params,
@@ -73,6 +75,7 @@ export class TransactionsAggregation {
       categoryName: row.categoryName,
       categoryIcon: row.categoryIcon,
       categoryColor: row.categoryColor,
+      parentId: row.parentId,
       total: row.total,
       count: row.count,
     }));

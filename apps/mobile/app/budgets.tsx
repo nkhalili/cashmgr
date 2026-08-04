@@ -9,11 +9,12 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
-import { Stack, useRouter, useFocusEffect } from 'expo-router';
+import { Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@cashmgr/ui';
 import { BudgetWithProgress, AppError, formatCurrency } from '@cashmgr/core';
 import { useBudgetsService, useCurrenciesService } from '../src/contexts/services-context';
+import { useSafeRouter } from '../src/hooks/useSafeRouter';
 
 function ProgressBar({ percentage, theme }: { percentage: number; theme: ReturnType<typeof useTheme> }) {
   const clamped = Math.min(percentage, 100);
@@ -31,7 +32,7 @@ function ProgressBar({ percentage, theme }: { percentage: number; theme: ReturnT
 
 export default function BudgetsScreen() {
   const theme = useTheme();
-  const router = useRouter();
+  const router = useSafeRouter();
   const budgetsService = useBudgetsService();
   const currenciesService = useCurrenciesService();
 

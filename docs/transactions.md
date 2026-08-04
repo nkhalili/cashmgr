@@ -21,7 +21,7 @@ Transactions are the core of CashMgr. Every transaction is one of three types:
 3. Fill in the required fields:
    - **Amount** — must be a positive number
    - **Date** — defaults to today; tap to pick a different date
-   - **Account** — which account the money comes from (or goes to, for income)
+   - **Account** — which account the money comes from (or goes to, for income). The picker groups accounts under **Cash**, **Bank Accounts**, and **Credit Cards** headings so you can find the right one quickly
    - **Category** — choose an existing category
    - **Description** — brief label for the transaction
 4. Optionally add **Notes**
@@ -38,7 +38,7 @@ When recording a transfer:
 
 ## Editing a Transaction
 
-Tap any transaction to open it for editing. All fields can be changed. Balances are recalculated automatically — the old effect is reversed and the new one applied.
+Tap any transaction to open it for editing. All fields can be changed. Balances are recalculated automatically — the old effect is reversed and the new one applied. You can also turn on recurring here, or adjust an existing series' frequency/end date — see [Recurring Transactions](recurring-transactions.md).
 
 ## Deleting a Transaction
 

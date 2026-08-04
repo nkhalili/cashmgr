@@ -31,3 +31,12 @@ The backup includes accounts, categories, currencies, transactions, budgets (act
 **Replace mode** recalculates all account balances from transactions after import, so your balances will be accurate even if the backup's stored balances were stale.
 
 **Merge mode** compares `updatedAt` timestamps: the backup version wins only if it is newer than the local version.
+
+## Error Logs
+
+CashMgr keeps a local log of application errors on your device to help diagnose problems — it never leaves your device automatically.
+
+1. Go to **Settings → Logs**
+2. Tap **Share Log File** on mobile to open the share sheet, or **Download Log File** on web/desktop to save the file
+
+Share this file when reporting a bug. If nothing has gone wrong yet, the log will be empty and the button disabled.

@@ -10,6 +10,13 @@ type AccountRow = {
   balance: number;
   initialBalance: number;
   currency: string;
+  statementDay: number | null;
+  paymentDay: number | null;
+  paymentAccountId: string | null;
+  autoPaymentEnabled: number;
+  autoPaymentMode: Account['autoPaymentMode'] | null;
+  autoPaymentFixedAmount: number | null;
+  lastAutoPaymentDate: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -21,6 +28,13 @@ const ACCOUNT_SELECT_COLUMNS = `
   balance,
   initial_balance as initialBalance,
   currency,
+  statement_day as statementDay,
+  payment_day as paymentDay,
+  payment_account_id as paymentAccountId,
+  auto_payment_enabled as autoPaymentEnabled,
+  auto_payment_mode as autoPaymentMode,
+  auto_payment_fixed_amount as autoPaymentFixedAmount,
+  last_auto_payment_date as lastAutoPaymentDate,
   created_at as createdAt,
   updated_at as updatedAt
 `;
@@ -34,6 +48,12 @@ export class AccountsRepository {
     const currency = input.currency ?? DEFAULT_CURRENCY;
     const initialBalance = input.initialBalance ?? 0;
     const balance = initialBalance;
+    const statementDay = input.statementDay ?? null;
+    const paymentDay = input.paymentDay ?? null;
+    const paymentAccountId = input.paymentAccountId ?? null;
+    const autoPaymentEnabled = input.autoPaymentEnabled ?? false;
+    const autoPaymentMode = input.autoPaymentMode ?? null;
+    const autoPaymentFixedAmount = input.autoPaymentFixedAmount ?? null;
 
     await this.db.execute(
       `
@@ -44,11 +64,32 @@ export class AccountsRepository {
           balance,
           initial_balance,
           currency,
+          statement_day,
+          payment_day,
+          payment_account_id,
+          auto_payment_enabled,
+          auto_payment_mode,
+          auto_payment_fixed_amount,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
       `,
-      [id, input.name, input.type, balance, initialBalance, currency, now, now],
+      [
+        id,
+        input.name,
+        input.type,
+        balance,
+        initialBalance,
+        currency,
+        statementDay,
+        paymentDay,
+        paymentAccountId,
+        autoPaymentEnabled ? 1 : 0,
+        autoPaymentMode,
+        autoPaymentFixedAmount,
+        now,
+        now,
+      ],
     );
 
     return {
@@ -58,6 +99,13 @@ export class AccountsRepository {
       balance,
       initialBalance,
       currency,
+      statementDay,
+      paymentDay,
+      paymentAccountId,
+      autoPaymentEnabled,
+      autoPaymentMode,
+      autoPaymentFixedAmount,
+      lastAutoPaymentDate: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -99,6 +147,34 @@ export class AccountsRepository {
 
     if (input.balance !== undefined) {
       updates.balance = input.balance;
+    }
+
+    if (input.statementDay !== undefined) {
+      updates.statement_day = input.statementDay;
+    }
+
+    if (input.paymentDay !== undefined) {
+      updates.payment_day = input.paymentDay;
+    }
+
+    if (input.paymentAccountId !== undefined) {
+      updates.payment_account_id = input.paymentAccountId;
+    }
+
+    if (input.autoPaymentEnabled !== undefined) {
+      updates.auto_payment_enabled = input.autoPaymentEnabled ? 1 : 0;
+    }
+
+    if (input.autoPaymentMode !== undefined) {
+      updates.auto_payment_mode = input.autoPaymentMode;
+    }
+
+    if (input.autoPaymentFixedAmount !== undefined) {
+      updates.auto_payment_fixed_amount = input.autoPaymentFixedAmount;
+    }
+
+    if (input.lastAutoPaymentDate !== undefined) {
+      updates.last_auto_payment_date = input.lastAutoPaymentDate;
     }
 
     const { setClause, params } = buildUpdateClause(updates, true);
@@ -149,6 +225,13 @@ export class AccountsRepository {
       balance: row.balance,
       initialBalance: row.initialBalance,
       currency: row.currency,
+      statementDay: row.statementDay,
+      paymentDay: row.paymentDay,
+      paymentAccountId: row.paymentAccountId,
+      autoPaymentEnabled: !!row.autoPaymentEnabled,
+      autoPaymentMode: row.autoPaymentMode,
+      autoPaymentFixedAmount: row.autoPaymentFixedAmount,
+      lastAutoPaymentDate: row.lastAutoPaymentDate,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

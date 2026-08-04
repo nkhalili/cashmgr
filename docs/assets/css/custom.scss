@@ -13,3 +13,27 @@
   border-radius: 8px;
   flex-shrink: 0;
 }
+
+// Sidebar heading TOC
+@keyframes toc-open {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 0.65;
+    transform: translateY(0);
+  }
+}
+
+.toc-list {
+  display: block !important;
+  margin: 0.25rem 0 0.5rem 0 !important;
+  padding: 0 !important;
+  border-left: 2px solid currentColor !important;
+  animation: toc-open 0.25s ease;
+}
+
+.toc-link.toc-active {
+  font-weight: 600 !important;
+}

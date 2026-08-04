@@ -22,14 +22,20 @@ import {
   CreateTransactionInputSchema,
   DEFAULT_CURRENCY,
   getTodayDateString,
+  RecurringFrequency,
+  RECURRING_FREQUENCY_LABELS,
+  RECURRING_FREQUENCIES,
+  ACCOUNT_TYPE_GROUPS,
 } from '@cashmgr/core';
 import {
   useAccountsService,
   useCategoriesService,
+  useRecurringTransactionsService,
   useTransactionsService,
 } from '../src/contexts/services-context';
 import { useFormValidation } from '../src/hooks/useFormValidation';
 import { DateInput } from '../src/components/DateInput';
+import { Switch } from '../src/components/Switch';
 
 const TRANSACTION_TYPES: { label: string; value: TransactionType }[] = [
   { label: 'Expense', value: 'expense' },
@@ -37,7 +43,7 @@ const TRANSACTION_TYPES: { label: string; value: TransactionType }[] = [
   { label: 'Transfer', value: 'transfer' },
 ];
 
-type ModalType = 'account' | 'toAccount' | 'category' | null;
+type ModalType = 'account' | 'toAccount' | 'category' | 'frequency' | null;
 
 export default function EditTransactionScreen() {
   const theme = useTheme();
@@ -45,6 +51,7 @@ export default function EditTransactionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const accountsService = useAccountsService();
   const categoriesService = useCategoriesService();
+  const recurringTransactionsService = useRecurringTransactionsService();
   const transactionsService = useTransactionsService();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const keyboardHeight = useKeyboardHeight();
@@ -58,6 +65,15 @@ export default function EditTransactionScreen() {
   const [categoryId, setCategoryId] = React.useState('');
   const [toAccountId, setToAccountId] = React.useState('');
   const [notes, setNotes] = React.useState('');
+
+  // Recurrence state
+  const [isRecurring, setIsRecurring] = React.useState(false);
+  const [recurringFrequency, setRecurringFrequency] = React.useState<RecurringFrequency>('monthly');
+  const [recurringEndDate, setRecurringEndDate] = React.useState('');
+  // Set when the transaction being edited already belongs to a recurring series
+  const [recurringTemplateId, setRecurringTemplateId] = React.useState<string | null>(null);
+  const [originalRecurringFrequency, setOriginalRecurringFrequency] = React.useState<RecurringFrequency>('monthly');
+  const [originalRecurringEndDate, setOriginalRecurringEndDate] = React.useState('');
 
   // Data state
   const [accounts, setAccounts] = React.useState<Account[]>([]);
@@ -117,6 +133,19 @@ export default function EditTransactionScreen() {
         setCategoryId(transaction.categoryId || '');
         setToAccountId(transaction.toAccountId || '');
         setNotes(transaction.notes || '');
+
+        // If this transaction already belongs to a recurring series, pre-fill
+        // the series' frequency/end date so they can be edited inline
+        if (transaction.recurringTransactionId) {
+          const template = await recurringTransactionsService.getRecurringTransactionById(
+            transaction.recurringTransactionId,
+          );
+          setRecurringTemplateId(template.id);
+          setRecurringFrequency(template.frequency);
+          setRecurringEndDate(template.endDate || '');
+          setOriginalRecurringFrequency(template.frequency);
+          setOriginalRecurringEndDate(template.endDate || '');
+        }
       } catch (err) {
         const errorMessage = err instanceof AppError ? err.getUserMessage() : 'Failed to load data';
         setError(errorMessage);
@@ -126,7 +155,7 @@ export default function EditTransactionScreen() {
     };
 
     void loadData();
-  }, [id, accountsService, categoriesService, transactionsService]);
+  }, [id, accountsService, categoriesService, recurringTransactionsService, transactionsService]);
 
   // Filter categories by transaction type
   const filteredCategories = React.useMemo(() => {
@@ -173,6 +202,18 @@ export default function EditTransactionScreen() {
   const destinationAccounts = React.useMemo(() => {
     return accounts.filter((a) => a.id !== accountId);
   }, [accounts, accountId]);
+
+  // Group accounts by type (Cash / Bank Accounts / Credit Cards) for the account pickers
+  const groupAccounts = React.useCallback((list: Account[]) => {
+    return ACCOUNT_TYPE_GROUPS
+      .map((group) => ({ ...group, accounts: list.filter((a) => a.type === group.type) }))
+      .filter((group) => group.accounts.length > 0);
+  }, []);
+  const accountGroups = React.useMemo(() => groupAccounts(accounts), [accounts, groupAccounts]);
+  const destinationAccountGroups = React.useMemo(
+    () => groupAccounts(destinationAccounts),
+    [destinationAccounts, groupAccounts]
+  );
 
   // Reset destination account when source account changes
   React.useEffect(() => {
@@ -222,6 +263,38 @@ export default function EditTransactionScreen() {
         toAccountId: formValues.toAccountId,
         notes: formValues.notes,
       });
+
+      if (recurringTemplateId) {
+        // Already part of a series — update the template if frequency/end date changed
+        if (
+          recurringFrequency !== originalRecurringFrequency ||
+          recurringEndDate !== originalRecurringEndDate
+        ) {
+          await recurringTransactionsService.updateRecurringTransaction(recurringTemplateId, {
+            frequency: recurringFrequency,
+            endDate: recurringEndDate || null,
+          });
+        }
+      } else if (isRecurring) {
+        // Turning recurring on: this transaction becomes the series' start
+        await recurringTransactionsService.createRecurringTransactionFromExisting(
+          {
+            type: formValues.type,
+            amount: formValues.amount,
+            currency: formValues.currency,
+            accountId: formValues.accountId,
+            categoryId: formValues.categoryId,
+            toAccountId: formValues.toAccountId,
+            notes: formValues.notes,
+            frequency: recurringFrequency,
+            startDate: formValues.date,
+            endDate: recurringEndDate || undefined,
+          },
+          formValues.date,
+        );
+        await recurringTransactionsService.generateDueTransactions();
+      }
+
       setSuccess('Transaction updated successfully!');
 
       // Navigate back after a short delay
@@ -236,7 +309,20 @@ export default function EditTransactionScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [id, getFormValues, validateAll, transactionsService, router]);
+  }, [
+    id,
+    getFormValues,
+    validateAll,
+    transactionsService,
+    recurringTransactionsService,
+    isRecurring,
+    recurringFrequency,
+    recurringEndDate,
+    recurringTemplateId,
+    originalRecurringFrequency,
+    originalRecurringEndDate,
+    router,
+  ]);
 
   // Handle type change
   const handleTypeChange = React.useCallback(
@@ -422,6 +508,68 @@ export default function EditTransactionScreen() {
                 onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 150)}
               />
             </View>
+
+            {/* Recurrence */}
+            <View style={[styles.fieldContainer, { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing.md }]}>
+              {recurringTemplateId ? (
+                <View style={{ gap: theme.spacing.md }}>
+                  <View>
+                    <Text style={styles.label}>Recurring settings</Text>
+                    <Text style={styles.warningMessage}>
+                      This transaction is part of a recurring series. Changes here apply to future occurrences.
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={styles.label}>Frequency</Text>
+                    <TouchableOpacity
+                      style={styles.selectField}
+                      onPress={() => setActiveModal('frequency')}
+                    >
+                      <Text style={styles.selectFieldText}>
+                        {RECURRING_FREQUENCY_LABELS[recurringFrequency]}
+                      </Text>
+                      <Text style={styles.selectFieldArrow}>›</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <DateInput
+                    label="End date (optional)"
+                    value={recurringEndDate}
+                    onChange={setRecurringEndDate}
+                  />
+                </View>
+              ) : (
+                <>
+                  <Switch
+                    value={isRecurring}
+                    onChange={setIsRecurring}
+                    label="Make recurring"
+                    helperText="Repeat this transaction on a schedule"
+                  />
+
+                  {isRecurring && (
+                    <View style={{ marginTop: theme.spacing.md, gap: theme.spacing.md }}>
+                      <View>
+                        <Text style={styles.label}>Frequency</Text>
+                        <TouchableOpacity
+                          style={styles.selectField}
+                          onPress={() => setActiveModal('frequency')}
+                        >
+                          <Text style={styles.selectFieldText}>
+                            {RECURRING_FREQUENCY_LABELS[recurringFrequency]}
+                          </Text>
+                          <Text style={styles.selectFieldArrow}>›</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <DateInput
+                        label="End date (optional)"
+                        value={recurringEndDate}
+                        onChange={setRecurringEndDate}
+                      />
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
           </View>
 
           {/* Actions */}
@@ -469,17 +617,22 @@ export default function EditTransactionScreen() {
             </Pressable>
           </View>
           <ScrollView style={styles.modalContent}>
-            {accounts.map((account) => (
-              <Pressable
-                key={account.id}
-                style={styles.modalOption}
-                onPress={() => handleSelectAccount(account.id)}
-              >
-                <Text style={styles.modalOptionText}>
-                  {account.name} ({account.currency})
-                </Text>
-                {accountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
-              </Pressable>
+            {accountGroups.map((group) => (
+              <React.Fragment key={group.type}>
+                <Text style={styles.modalSectionHeader}>{group.label}</Text>
+                {group.accounts.map((account) => (
+                  <Pressable
+                    key={account.id}
+                    style={styles.modalOption}
+                    onPress={() => handleSelectAccount(account.id)}
+                  >
+                    <Text style={styles.modalOptionText}>
+                      {account.name} ({account.currency})
+                    </Text>
+                    {accountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
+                  </Pressable>
+                ))}
+              </React.Fragment>
             ))}
           </ScrollView>
         </View>
@@ -500,17 +653,22 @@ export default function EditTransactionScreen() {
             </Pressable>
           </View>
           <ScrollView style={styles.modalContent}>
-            {destinationAccounts.map((account) => (
-              <Pressable
-                key={account.id}
-                style={styles.modalOption}
-                onPress={() => handleSelectToAccount(account.id)}
-              >
-                <Text style={styles.modalOptionText}>
-                  {account.name} ({account.currency})
-                </Text>
-                {toAccountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
-              </Pressable>
+            {destinationAccountGroups.map((group) => (
+              <React.Fragment key={group.type}>
+                <Text style={styles.modalSectionHeader}>{group.label}</Text>
+                {group.accounts.map((account) => (
+                  <Pressable
+                    key={account.id}
+                    style={styles.modalOption}
+                    onPress={() => handleSelectToAccount(account.id)}
+                  >
+                    <Text style={styles.modalOptionText}>
+                      {account.name} ({account.currency})
+                    </Text>
+                    {toAccountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
+                  </Pressable>
+                ))}
+              </React.Fragment>
             ))}
           </ScrollView>
         </View>
@@ -539,6 +697,35 @@ export default function EditTransactionScreen() {
               >
                 <Text style={styles.modalOptionText}>{item.label}</Text>
                 {categoryId === item.id && <Text style={styles.modalOptionCheck}>✓</Text>}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Frequency Selection Modal */}
+      <Modal
+        visible={activeModal === 'frequency'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setActiveModal(null)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Frequency</Text>
+            <Pressable onPress={() => setActiveModal(null)}>
+              <Text style={styles.modalClose}>Done</Text>
+            </Pressable>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            {RECURRING_FREQUENCIES.map((freq) => (
+              <Pressable
+                key={freq}
+                style={styles.modalOption}
+                onPress={() => { setRecurringFrequency(freq); setActiveModal(null); }}
+              >
+                <Text style={styles.modalOptionText}>{RECURRING_FREQUENCY_LABELS[freq]}</Text>
+                {recurringFrequency === freq && <Text style={styles.modalOptionCheck}>✓</Text>}
               </Pressable>
             ))}
           </ScrollView>
@@ -697,6 +884,11 @@ const createStyles = (theme: Theme) =>
       fontSize: theme.typography.caption.fontSize,
       marginTop: theme.spacing.xs,
     },
+    warningMessage: {
+      color: '#a60',
+      fontSize: theme.typography.caption.fontSize,
+      marginTop: theme.spacing.xs,
+    },
     actions: {
       flexDirection: 'row',
       gap: theme.spacing.md,
@@ -775,5 +967,14 @@ const createStyles = (theme: Theme) =>
       fontSize: 18,
       color: theme.colors.primary,
       fontWeight: fontWeight(600),
+    },
+    modalSectionHeader: {
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: fontWeight(600),
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.md,
+      paddingBottom: theme.spacing.xs,
     },
   });

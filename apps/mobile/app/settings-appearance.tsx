@@ -10,6 +10,8 @@ import {
 import { Stack } from 'expo-router';
 import { Theme, useTheme, AccentColor } from '@cashmgr/ui';
 import { useThemePreference, ThemePreference } from '../src/contexts/theme-context';
+import { useShowCreditBalances } from '../src/contexts/credit-display-context';
+import { Switch } from '../src/components/Switch';
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'system', label: 'System' },
@@ -26,6 +28,7 @@ const ACCENT_OPTIONS: { value: AccentColor; label: string; color: string }[] = [
 export default function SettingsAppearanceScreen() {
   const theme = useTheme();
   const { preference, setPreference, accent, setAccent } = useThemePreference();
+  const { show: showCreditBalances, setShow: setShowCreditBalances } = useShowCreditBalances();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 
   return (
@@ -81,6 +84,16 @@ export default function SettingsAppearanceScreen() {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Accounts page</Text>
+          <Switch
+            value={showCreditBalances}
+            onChange={setShowCreditBalances}
+            label="Show balance payable / outstanding balance"
+            helperText="Display credit card statement and outstanding balances on the Accounts page"
+          />
         </View>
       </ScrollView>
     </View>

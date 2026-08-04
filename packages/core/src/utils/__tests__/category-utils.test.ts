@@ -5,8 +5,10 @@ import {
   groupCategoriesByType,
   getParentCategories,
   getChildCategories,
+  buildCategoryAggregationTree,
 } from '../category-utils';
 import type { Category } from '../../models/Category';
+import type { CategoryAggregation } from '../../types';
 
 describe('formatCategoryLabel', () => {
   it('should format category with icon and name', () => {
@@ -483,5 +485,93 @@ describe('getChildCategories', () => {
     const result = getChildCategories(categories, 'non-existent');
 
     expect(result).toEqual([]);
+  });
+});
+
+describe('buildCategoryAggregationTree', () => {
+  const makeCategory = (overrides: Partial<Category> & Pick<Category, 'id' | 'name'>): Category => ({
+    type: 'expense',
+    isActive: true,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    ...overrides,
+  });
+
+  const makeAggregation = (overrides: Partial<CategoryAggregation> & Pick<CategoryAggregation, 'categoryId' | 'categoryName' | 'total' | 'count'>): CategoryAggregation => ({
+    categoryIcon: null,
+    categoryColor: null,
+    ...overrides,
+  });
+
+  it('returns empty array when there are no aggregations', () => {
+    const result = buildCategoryAggregationTree([], []);
+    expect(result).toEqual([]);
+  });
+
+  it('rolls up sub-category totals into the parent and computes percentage relative to the parent', () => {
+    const categories: Category[] = [
+      makeCategory({ id: 'food', name: 'Food' }),
+      makeCategory({ id: 'restaurants', name: 'Restaurants', parentId: 'food' }),
+      makeCategory({ id: 'groceries', name: 'Groceries', parentId: 'food' }),
+    ];
+    const aggregations: CategoryAggregation[] = [
+      makeAggregation({ categoryId: 'restaurants', categoryName: 'Restaurants', total: 60, count: 2 }),
+      makeAggregation({ categoryId: 'groceries', categoryName: 'Groceries', total: 40, count: 1 }),
+    ];
+
+    const result = buildCategoryAggregationTree(aggregations, categories);
+
+    expect(result).toHaveLength(1);
+    const food = result[0];
+    expect(food.categoryId).toBe('food');
+    // Parent total is the sum of its sub-categories since it has no direct transactions
+    expect(food.total).toBe(100);
+    expect(food.percentage).toBe(100);
+    expect(food.subcategories).toHaveLength(2);
+
+    const restaurants = food.subcategories!.find((s) => s.categoryId === 'restaurants')!;
+    const groceries = food.subcategories!.find((s) => s.categoryId === 'groceries')!;
+    // Sub-category percentage is relative to the parent's total, not the grand total
+    expect(restaurants.percentage).toBe(60);
+    expect(groceries.percentage).toBe(40);
+  });
+
+  it('includes the parent own direct total plus its sub-categories', () => {
+    const categories: Category[] = [
+      makeCategory({ id: 'food', name: 'Food' }),
+      makeCategory({ id: 'restaurants', name: 'Restaurants', parentId: 'food' }),
+    ];
+    const aggregations: CategoryAggregation[] = [
+      makeAggregation({ categoryId: 'food', categoryName: 'Food', total: 20, count: 1 }),
+      makeAggregation({ categoryId: 'restaurants', categoryName: 'Restaurants', total: 80, count: 2 }),
+    ];
+
+    const result = buildCategoryAggregationTree(aggregations, categories);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].total).toBe(100);
+    expect(result[0].count).toBe(3);
+    expect(result[0].subcategories).toHaveLength(1);
+    expect(result[0].subcategories![0].percentage).toBe(80);
+  });
+
+  it('leaves top-level categories without sub-categories unaffected, percentage relative to grand total', () => {
+    const categories: Category[] = [
+      makeCategory({ id: 'food', name: 'Food' }),
+      makeCategory({ id: 'transport', name: 'Transport' }),
+    ];
+    const aggregations: CategoryAggregation[] = [
+      makeAggregation({ categoryId: 'food', categoryName: 'Food', total: 75, count: 1 }),
+      makeAggregation({ categoryId: 'transport', categoryName: 'Transport', total: 25, count: 1 }),
+    ];
+
+    const result = buildCategoryAggregationTree(aggregations, categories);
+
+    expect(result).toHaveLength(2);
+    const food = result.find((r) => r.categoryId === 'food')!;
+    const transport = result.find((r) => r.categoryId === 'transport')!;
+    expect(food.percentage).toBe(75);
+    expect(transport.percentage).toBe(25);
+    expect(food.subcategories).toEqual([]);
   });
 });

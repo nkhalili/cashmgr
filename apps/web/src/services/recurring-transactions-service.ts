@@ -35,6 +35,31 @@ export class RecurringTransactionsService {
     }
   }
 
+  /**
+   * Create a recurring template anchored to an existing transaction's date.
+   * Backfills lastGeneratedDate to anchorDate so the generator doesn't create
+   * a duplicate for that date; callers should follow up with generateDueTransactions()
+   * to backfill any occurrences between anchorDate and today.
+   */
+  async createRecurringTransactionFromExisting(
+    input: CreateRecurringTransactionInput,
+    anchorDate: string,
+  ): Promise<RecurringTransaction> {
+    try {
+      const validated = CreateRecurringTransactionInputSchema.parse(input);
+      const created = await this.adapter.createRecurringTransaction(validated);
+      return await this.adapter.updateRecurringTransaction({
+        id: created.id,
+        lastGeneratedDate: anchorDate,
+      });
+    } catch (error) {
+      if (error && typeof error === 'object' && 'issues' in error) {
+        throw ValidationError.fromZodError(error);
+      }
+      throw ErrorHandler.handle(error, 'RecurringTransactionsService.createRecurringTransactionFromExisting');
+    }
+  }
+
   async listRecurringTransactions(activeOnly = false): Promise<RecurringTransaction[]> {
     try {
       return await this.adapter.getRecurringTransactions(activeOnly);

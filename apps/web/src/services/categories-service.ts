@@ -36,6 +36,8 @@ const DEFAULT_EXPENSE_CATEGORIES: CreateCategoryInput[] = [
   { name: 'Shopping', type: 'expense', icon: '\u{1F455}', color: '#FF5722' },
   { name: 'Healthcare', type: 'expense', icon: '\u{1F48A}', color: '#03A9F4' },
   { name: 'Education', type: 'expense', icon: '\u{1F4DA}', color: '#795548' },
+  { name: 'Coffee', type: 'expense', icon: '\u{2615}', color: '#8D6E63' },
+  { name: 'Subscription', type: 'expense', icon: '\u{1F4F1}', color: '#009688' },
 ];
 
 /**
