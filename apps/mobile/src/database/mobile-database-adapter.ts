@@ -658,6 +658,7 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
         c.name as categoryName,
         c.icon as categoryIcon,
         c.color as categoryColor,
+        c.parent_id as parentId,
         SUM(t.amount) as total,
         COUNT(t.id) as count
       FROM transactions t
@@ -687,13 +688,14 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
       params.push(filter.accountId);
     }
 
-    sql += ' GROUP BY c.id, c.name, c.icon, c.color ORDER BY total DESC';
+    sql += ' GROUP BY c.id, c.name, c.icon, c.color, c.parent_id ORDER BY total DESC';
 
     const rows = await this.db.getAllAsync<{
       categoryId: string;
       categoryName: string;
       categoryIcon: string | null;
       categoryColor: string | null;
+      parentId: string | null;
       total: number;
       count: number;
     }>(sql, params);
@@ -703,6 +705,7 @@ export class MobileDatabaseAdapter implements DatabaseAdapter {
       categoryName: row.categoryName,
       categoryIcon: row.categoryIcon,
       categoryColor: row.categoryColor,
+      parentId: row.parentId,
       total: row.total,
       count: row.count,
     }));

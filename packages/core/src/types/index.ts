@@ -33,9 +33,12 @@ export interface CategoryAggregation {
   categoryName: string;
   categoryIcon: string | null;
   categoryColor: string | null;
+  parentId?: string | null;
   total: number;
   count: number;
   percentage?: number;
+  /** Sub-category aggregations rolled up into this category's total, percentage is relative to this category's total */
+  subcategories?: CategoryAggregation[];
 }
 
 export interface DashboardSummary {

@@ -388,46 +388,91 @@ export default function HomeScreen() {
           const percentage = item.percentage?.toFixed(1) || '0.0';
           const categoryColor = getCategoryColor(index, filter.type);
           return (
-            <TouchableOpacity
-              key={item.categoryId}
-              style={[
-                styles.categoryItem,
-                selectedSliceId === item.categoryId && styles.categoryItemSelected,
-              ]}
-              onPress={() => setSelectedSliceId(item.categoryId)}
-            >
-              <View style={styles.categoryLeft}>
-                {/* Color-coded circle with icon (matches web/desktop) */}
-                <View
-                  style={[
-                    styles.categoryColorBadge,
-                    { backgroundColor: categoryColor },
-                  ]}
-                >
-                  <Text style={styles.categoryIcon}>{item.categoryIcon || '📁'}</Text>
+            <View key={item.categoryId}>
+              <TouchableOpacity
+                style={[
+                  styles.categoryItem,
+                  selectedSliceId === item.categoryId && styles.categoryItemSelected,
+                ]}
+                onPress={() => setSelectedSliceId(item.categoryId)}
+              >
+                <View style={styles.categoryLeft}>
+                  {/* Color-coded circle with icon (matches web/desktop) */}
+                  <View
+                    style={[
+                      styles.categoryColorBadge,
+                      { backgroundColor: categoryColor },
+                    ]}
+                  >
+                    <Text style={styles.categoryIcon}>{item.categoryIcon || '📁'}</Text>
+                  </View>
+                  {/* Name + budget badge stacked vertically */}
+                  <View style={styles.categoryNameColumn}>
+                    <Text style={styles.categoryName}>{item.categoryName}</Text>
+                    {filter.periodMode === 'monthly' && filter.type === 'expense' && (() => {
+                      const budget = budgetMap.get(item.categoryId);
+                      if (!budget) return null;
+                      const isOver = budget.spent > budget.amount;
+                      return (
+                        <View style={[styles.budgetBadge, isOver ? styles.budgetBadgeOver : styles.budgetBadgeOn]}>
+                          <Text style={[styles.budgetBadgeText, isOver ? styles.budgetBadgeTextOver : styles.budgetBadgeTextOn]}>
+                            {isOver ? 'Over budget' : 'On budget'}
+                          </Text>
+                        </View>
+                      );
+                    })()}
+                  </View>
                 </View>
-                {/* Name + budget badge stacked vertically */}
-                <View style={styles.categoryNameColumn}>
-                  <Text style={styles.categoryName}>{item.categoryName}</Text>
-                  {filter.periodMode === 'monthly' && filter.type === 'expense' && (() => {
-                    const budget = budgetMap.get(item.categoryId);
-                    if (!budget) return null;
-                    const isOver = budget.spent > budget.amount;
-                    return (
-                      <View style={[styles.budgetBadge, isOver ? styles.budgetBadgeOver : styles.budgetBadgeOn]}>
-                        <Text style={[styles.budgetBadgeText, isOver ? styles.budgetBadgeTextOver : styles.budgetBadgeTextOn]}>
-                          {isOver ? 'Over budget' : 'On budget'}
-                        </Text>
+                <View style={styles.categoryRight}>
+                  <Text style={styles.categoryAmount}>{formatCurrency(item.total)}</Text>
+                  <Text style={styles.categoryPercent}>{percentage}%</Text>
+                </View>
+              </TouchableOpacity>
+              {/* Sub-categories, indented, percentage relative to parent's total */}
+              {item.subcategories?.map((sub) => {
+                const subPercentage = sub.percentage?.toFixed(1) || '0.0';
+                return (
+                  <TouchableOpacity
+                    key={sub.categoryId}
+                    style={[
+                      styles.subcategoryItem,
+                      selectedSliceId === sub.categoryId && styles.categoryItemSelected,
+                    ]}
+                    onPress={() => setSelectedSliceId(sub.categoryId)}
+                  >
+                    <View style={styles.categoryLeft}>
+                      <View
+                        style={[
+                          styles.subcategoryColorBadge,
+                          { backgroundColor: categoryColor },
+                        ]}
+                      >
+                        <Text style={styles.subcategoryIcon}>{sub.categoryIcon || '📁'}</Text>
                       </View>
-                    );
-                  })()}
-                </View>
-              </View>
-              <View style={styles.categoryRight}>
-                <Text style={styles.categoryAmount}>{formatCurrency(item.total)}</Text>
-                <Text style={styles.categoryPercent}>{percentage}%</Text>
-              </View>
-            </TouchableOpacity>
+                      <View style={styles.categoryNameColumn}>
+                        <Text style={styles.subcategoryName}>{sub.categoryName}</Text>
+                        {filter.periodMode === 'monthly' && filter.type === 'expense' && (() => {
+                          const budget = budgetMap.get(sub.categoryId);
+                          if (!budget) return null;
+                          const isOver = budget.spent > budget.amount;
+                          return (
+                            <View style={[styles.budgetBadge, isOver ? styles.budgetBadgeOver : styles.budgetBadgeOn]}>
+                              <Text style={[styles.budgetBadgeText, isOver ? styles.budgetBadgeTextOver : styles.budgetBadgeTextOn]}>
+                                {isOver ? 'Over budget' : 'On budget'}
+                              </Text>
+                            </View>
+                          );
+                        })()}
+                      </View>
+                    </View>
+                    <View style={styles.categoryRight}>
+                      <Text style={styles.subcategoryAmount}>{formatCurrency(sub.total)}</Text>
+                      <Text style={styles.categoryPercent}>{subPercentage}% of {item.categoryName}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           );
         })}
       </View>
@@ -681,6 +726,40 @@ const createStyles = (theme: Theme) =>
     categoryPercent: {
       fontSize: 12,
       color: theme.colors.textSecondary,
+    },
+    subcategoryItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      marginLeft: 24,
+      borderRadius: 8,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    subcategoryColorBadge: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      alignItems: 'center',
+      justifyContent: 'center',
+      opacity: 0.6,
+    },
+    subcategoryIcon: {
+      fontSize: 13,
+    },
+    subcategoryName: {
+      fontSize: 14,
+      fontWeight: fontWeight(500),
+      color: theme.colors.textSecondary,
+    },
+    subcategoryAmount: {
+      fontSize: 14,
+      fontWeight: fontWeight(600),
+      color: theme.colors.textSecondary,
+      marginBottom: 2,
     },
     budgetBadge: {
       marginTop: 2,
