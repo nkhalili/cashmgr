@@ -2,7 +2,7 @@
   "expo": {
     "name": "Cash Mgr",
     "slug": "cashmgr",
-    "version": "1.0.0-beta.1",
+    "version": "1.0.0-rc.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
