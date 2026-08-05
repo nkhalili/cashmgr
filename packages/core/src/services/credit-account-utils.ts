@@ -1,7 +1,7 @@
 import type { Account } from '../models/Account';
 import type { Transaction } from '../models/Transaction';
 import { getAccountBalanceDelta } from './balance-utils';
-import { parseDate, toDateString } from '../utils/recurring-dates';
+import { parseDate } from '../utils/recurring-dates';
 import { getTodayDateString } from '../utils/date';
 
 /**
@@ -10,7 +10,8 @@ import { getTodayDateString } from '../utils/date';
  */
 function clampDayOfMonth(year: number, month: number, day: number): string {
   const lastDay = new Date(year, month, 0).getDate();
-  return toDateString(year, month, Math.min(day, lastDay));
+  const clampedDay = Math.min(day, lastDay);
+  return `${year}-${String(month).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
 }
 
 /**

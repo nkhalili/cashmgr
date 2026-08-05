@@ -5,7 +5,7 @@ export function parseDate(dateStr: string): { year: number; month: number; day: 
   return { year, month, day };
 }
 
-export function toDateString(year: number, month: number, day: number): string {
+function formatDateParts(year: number, month: number, day: number): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
@@ -18,7 +18,7 @@ function addDays(dateStr: string, days: number): string {
   const { year, month, day } = parseDate(dateStr);
   const d = new Date(year, month - 1, day);
   d.setDate(d.getDate() + days);
-  return toDateString(d.getFullYear(), d.getMonth() + 1, d.getDate());
+  return formatDateParts(d.getFullYear(), d.getMonth() + 1, d.getDate());
 }
 
 function addMonths(dateStr: string, months: number): string {
@@ -26,12 +26,12 @@ function addMonths(dateStr: string, months: number): string {
   const d = new Date(year, month - 1 + months, 1);
   const maxDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   const clampedDay = Math.min(day, maxDay);
-  return toDateString(d.getFullYear(), d.getMonth() + 1, clampedDay);
+  return formatDateParts(d.getFullYear(), d.getMonth() + 1, clampedDay);
 }
 
 function lastDayOfMonth(year: number, month: number): string {
   const lastDay = new Date(year, month, 0).getDate();
-  return toDateString(year, month, lastDay);
+  return formatDateParts(year, month, lastDay);
 }
 
 function diffDays(a: string, b: string): number {
