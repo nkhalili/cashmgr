@@ -1,482 +1,780 @@
 import React from 'react';
 import {
-  ScrollView,
   View,
   Text,
   StyleSheet,
-  TextStyle,
+  SectionList,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
+  TextStyle,
+  TextInput,
+  ScrollView,
 } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { useFocusEffect } from 'expo-router';
-import { Theme, useTheme, getCategoryColor } from '@cashmgr/ui';
-import type {
-  CategoryAggregation,
-  DashboardSummary,
-  DashboardFilter,
-  PeriodMode,
-  BudgetWithProgress,
+import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSafeRouter } from '../../src/hooks/useSafeRouter';
+import { Theme, useTheme } from '@cashmgr/ui';
+import {
+  Account,
+  Category,
+  Transaction,
+  TransactionType,
+  AppError,
+  ErrorHandler,
+  formatCurrency,
+  FilterParams,
+  getTodayDateString,
+  getMonthStartDateString,
+  getMonthEndDateString,
 } from '@cashmgr/core';
-import { ErrorHandler, navigateMonth as utilNavigateMonth, getMonthLabel } from '@cashmgr/core';
-import { useDashboardService, useBudgetsService } from '../../src/contexts/services-context';
-import type { TotalBalanceResult } from '../../src/services/dashboard-service';
-import { DateInput } from '../../src/components/DateInput';
-import { PieChart } from '../../src/components/PieChart';
-import { SummaryCard, type SummaryItem } from '../../src/components/SummaryCard';
+import {
+  useAccountsService,
+  useCategoriesService,
+  useTransactionsService,
+} from '../../src/contexts/services-context';
+import { SelectionModal } from '../../src/components/SelectionModal';
+import { DateRangeModal } from '../../src/components/DateRangeModal';
+import { FilterChip } from '../../src/components/FilterChip';
 import { MonthNavigator } from '../../src/components/MonthNavigator';
+import { SummaryCard, type SummaryItem } from '../../src/components/SummaryCard';
+import { useTransactionFilters } from '../../src/hooks/useTransactionFilters';
+import { useCategoryFormatter } from '../../src/hooks/useCategoryFormatter';
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+const TYPE_OPTIONS: { label: string; value: TransactionType | '' }[] = [
+  { label: 'All Types', value: '' },
+  { label: 'Expense', value: 'expense' },
+  { label: 'Income', value: 'income' },
+  { label: 'Transfer', value: 'transfer' },
+];
+
+// Memoized SearchBar component to prevent losing focus on re-renders
+const SearchBar = React.memo(({
+  value,
+  onChangeText,
+  onClear,
+  theme,
+  styles,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  onClear: () => void;
+  theme: Theme;
+  styles: any;
+}) => (
+  <View style={styles.searchContainer}>
+    <TextInput
+      style={styles.searchInput}
+      placeholder="Search transactions..."
+      placeholderTextColor={theme.colors.textSecondary}
+      value={value}
+      onChangeText={onChangeText}
+    />
+    {value.length > 0 && (
+      <TouchableOpacity
+        style={styles.searchClear}
+        onPress={onClear}
+      >
+        <Text style={styles.searchClearText}>×</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+));
+
+// F-052: Weekday abbreviations for daily grouping
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// F-052: Daily group structure for SectionList
+interface DailyGroup {
+  date: string;           // YYYY-MM-DD
+  dayNumber: string;      // "05", "12", etc. (zero-padded)
+  weekday: string;        // "Mon", "Tue", etc.
+  data: Transaction[];    // SectionList requires 'data' property
+  dayIncome: number;
+  dayExpenses: number;
 }
 
-export default function HomeScreen() {
+type ModalType = 'type' | 'account' | 'category' | 'dateRange' | null;
+
+export default function TransactionsScreen() {
   const theme = useTheme();
+  const router = useSafeRouter();
+  // F-053: Read accountId from route params
+  const { accountId } = useLocalSearchParams<{ accountId?: string }>();
+  const accountsService = useAccountsService();
+  const categoriesService = useCategoriesService();
+  const transactionsService = useTransactionsService();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
-  const statusStyle = theme.mode === 'dark' ? 'light' : 'dark';
-  const dashboardService = useDashboardService();
-  const budgetsService = useBudgetsService();
 
-  const now = new Date();
-  const [filter, setFilter] = React.useState<DashboardFilter>({
-    type: 'expense',
-    periodMode: 'monthly',
-    month: now.getMonth() + 1, // Use 1-12 indexing
-    year: now.getFullYear(),
-  });
+  // Data state
+  const [transactions, setTransactions] = React.useState<Transaction[]>([]);
+  const [accounts, setAccounts] = React.useState<Account[]>([]);
+  const [categories, setCategories] = React.useState<Category[]>([]);
 
-  // B-002: Custom date range state
-  const [customStartDate, setCustomStartDate] = React.useState('');
-  const [customEndDate, setCustomEndDate] = React.useState('');
+  // Use filter hook to manage all filter state
+  const {
+    state: filterState,
+    dispatch: filterDispatch,
+    derived,
+    debouncedSearchQuery,
+  } = useTransactionFilters(accountId, accounts, categories);
 
-  const [breakdown, setBreakdown] = React.useState<CategoryAggregation[]>([]);
-  const [summary, setSummary] = React.useState<DashboardSummary | null>(null);
-  const [totalBalance, setTotalBalance] = React.useState<TotalBalanceResult | null>(null);
-  const [budgetMap, setBudgetMap] = React.useState<Map<string, BudgetWithProgress>>(new Map());
-  const [loading, setLoading] = React.useState(true);
+  // Use category formatter hook
+  const { flattenedCategories, categoryMap, accountMap } =
+    useCategoryFormatter(categories, accounts);
+
+  // UI state
+  const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
-  const [selectedSliceId, setSelectedSliceId] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [activeModal, setActiveModal] = React.useState<ModalType>(null);
 
-  // B-002: Build filter with custom dates when in custom mode
-  const buildFilter = React.useCallback((): DashboardFilter => {
-    const result: DashboardFilter = { ...filter };
-    // Convert 1-12 month to 0-11 for API if needed, or update API to use 1-12
-    // For now, keeping month as is since DashboardFilter expects it
-    if (filter.periodMode === 'custom' && customStartDate && customEndDate) {
-      result.startDate = customStartDate;
-      result.endDate = customEndDate;
-    }
-    return result;
-  }, [filter, customStartDate, customEndDate]);
+  // Temp state for date range modal
+  const [tempStartDate, setTempStartDate] = React.useState('');
+  const [tempEndDate, setTempEndDate] = React.useState('');
 
-  const handleRefresh = React.useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      const currentFilter = buildFilter();
-      const [breakdownData, summaryData, balanceData] = await Promise.all([
-        dashboardService.getCategoryBreakdown(currentFilter),
-        dashboardService.getSummary(currentFilter),
-        dashboardService.getTotalBalance(currentFilter),
-      ]);
-      setBreakdown(breakdownData);
-      setSummary(summaryData);
-      setTotalBalance(balanceData);
-
-      if (currentFilter.periodMode === 'monthly' && currentFilter.type === 'expense') {
-        const budgets = await budgetsService.getBudgetsWithProgress(currentFilter.month ?? 1, currentFilter.year);
-        setBudgetMap(new Map(budgets.map((b) => [b.categoryId, b])));
-      } else {
-        setBudgetMap(new Map());
-      }
-    } catch (error) {
-      // Silent fail on refresh
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [dashboardService, budgetsService, buildFilter]);
-
-  const isFirstMount = React.useRef(true);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      if (isFirstMount.current) {
-        isFirstMount.current = false;
-        return;
-      }
-      void handleRefresh();
-    }, [handleRefresh])
+  // Memoized search callbacks to prevent SearchBar from re-rendering
+  // Empty dependencies are safe because filterDispatch is stable from useReducer
+  const handleSearchChange = React.useCallback(
+    (text: string) => filterDispatch({ type: 'SET_SEARCH', payload: text }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
   );
 
-  React.useEffect(() => {
-    let isMounted = true;
+  const handleSearchClear = React.useCallback(
+    () => filterDispatch({ type: 'SET_SEARCH', payload: '' }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        // Run sequentially to avoid expo-sqlite race conditions
-        const currentFilter = buildFilter();
-        const breakdownData = await dashboardService.getCategoryBreakdown(currentFilter);
-        const summaryData = await dashboardService.getSummary(currentFilter);
-        const balanceData = await dashboardService.getTotalBalance(currentFilter);
-        let newBudgetMap = new Map<string, BudgetWithProgress>();
-        if (currentFilter.periodMode === 'monthly' && currentFilter.type === 'expense') {
-          const budgets = await budgetsService.getBudgetsWithProgress(currentFilter.month ?? 1, currentFilter.year);
-          newBudgetMap = new Map(budgets.map((b) => [b.categoryId, b]));
-        }
-        if (isMounted) {
-          setBreakdown(breakdownData);
-          setSummary(summaryData);
-          setTotalBalance(balanceData);
-          setBudgetMap(newBudgetMap);
-        }
-      } catch (error) {
-        ErrorHandler.handle(error, 'Dashboard.loadData');
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+  // Load reference data (accounts and categories)
+  const loadReferenceData = React.useCallback(async () => {
+    try {
+      const [accountsData, categoriesData] = await Promise.all([
+        accountsService.listAccounts(),
+        categoriesService.listCategories(false),
+      ]);
+      setAccounts(accountsData);
+      setCategories(categoriesData);
+    } catch (err) {
+      ErrorHandler.handle(err, 'Transactions.loadReferenceData');
+    }
+  }, [accountsService, categoriesService]);
+
+  // Load transactions with filters
+  const loadTransactions = React.useCallback(async () => {
+    try {
+      const filter: FilterParams = {};
+
+      if (filterState.type) {
+        filter.type = filterState.type;
       }
-    };
+      if (filterState.accountId) {
+        filter.accountId = filterState.accountId;
+      }
+      if (filterState.categoryId) {
+        filter.categoryId = filterState.categoryId;
+      }
 
-    void loadData();
+      // F-050: Use custom date range if set, otherwise use month pagination
+      if (filterState.startDate || filterState.endDate) {
+        // B-001: Use date strings directly (YYYY-MM-DD format)
+        filter.dateRange = {
+          startDate: filterState.startDate || '1970-01-01',
+          endDate: filterState.endDate || getTodayDateString(),
+        };
+      } else {
+        // F-050: Default to current month
+        filter.dateRange = {
+          startDate: getMonthStartDateString(filterState.currentYear, filterState.currentMonth),
+          endDate: getMonthEndDateString(filterState.currentYear, filterState.currentMonth),
+        };
+      }
 
-    return () => {
-      isMounted = false;
-    };
-  }, [dashboardService, budgetsService, buildFilter]);
+      const data = await transactionsService.listTransactions(filter);
 
-  const setType = (type: 'income' | 'expense') => {
-    setFilter((prev) => ({ ...prev, type }));
-  };
+      setTransactions(data);
+      setError(null);
+    } catch (err) {
+      const errorMessage = err instanceof AppError ? err.getUserMessage() : 'Failed to load transactions';
+      setError(errorMessage);
+    }
+  }, [
+    transactionsService,
+    filterState.type,
+    filterState.accountId,
+    filterState.categoryId,
+    filterState.startDate,
+    filterState.endDate,
+    filterState.currentMonth,
+    filterState.currentYear,
+  ]);
 
-  const setPeriodMode = (periodMode: PeriodMode) => {
-    setFilter((prev) => ({ ...prev, periodMode }));
-  };
+  // Client-side search filter - applied instantly without API call
+  const filteredTransactions = React.useMemo(() => {
+    if (!debouncedSearchQuery.trim()) {
+      return transactions;
+    }
 
-  // B-002: Year navigation
-  const navigateYear = (direction: 'prev' | 'next') => {
-    setFilter((prev) => ({
-      ...prev,
-      year: prev.year + (direction === 'prev' ? -1 : 1),
-    }));
-  };
-
-  // Month navigation for monthly mode - uses filter-utils
-  const handleMonthNavigate = React.useCallback((direction: 'prev' | 'next') => {
-    setFilter((prev) => {
-      const currentMonth = prev.month ?? 1;
-      const currentYear = prev.year;
-      const result = utilNavigateMonth(currentYear, currentMonth, direction);
-      return { ...prev, month: result.month, year: result.year };
+    const query = debouncedSearchQuery.toLowerCase();
+    return transactions.filter((t) => {
+      // Search in notes
+      if (t.notes && t.notes.toLowerCase().includes(query)) {
+        return true;
+      }
+      // Search in category name
+      const category = categoryMap.get(t.categoryId || '');
+      if (category && category.name.toLowerCase().includes(query)) {
+        return true;
+      }
+      // Search in account name
+      const account = accountMap.get(t.accountId);
+      if (account && account.name.toLowerCase().includes(query)) {
+        return true;
+      }
+      // Search in amount (convert to string for searching)
+      const amountStr = t.amount.toString();
+      if (amountStr.includes(query)) {
+        return true;
+      }
+      return false;
     });
-  }, []);
+  }, [transactions, debouncedSearchQuery, categoryMap, accountMap]);
 
-  // B-002: Period label for display
-  const getPeriodLabel = () => {
-    if (filter.periodMode === 'monthly') {
-      return getMonthLabel(filter.month ?? 1, filter.year, 'long');
-    }
-    if (filter.periodMode === 'yearly') {
-      return `${filter.year}`;
-    }
-    if (customStartDate && customEndDate) {
-      return `${customStartDate} to ${customEndDate}`;
-    }
-    return 'Custom Period';
+  // Load data when tab is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      let isMounted = true;
+
+      const load = async () => {
+        setIsLoading(true);
+        await loadReferenceData();
+        if (isMounted) {
+          await loadTransactions();
+          setIsLoading(false);
+        }
+      };
+
+      void load();
+
+      return () => {
+        isMounted = false;
+      };
+    }, [loadReferenceData, loadTransactions])
+  );
+
+  // Pull to refresh
+  const handleRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    await loadReferenceData();
+    await loadTransactions();
+    setIsRefreshing(false);
+  }, [loadReferenceData, loadTransactions]);
+
+  // Clear all filters
+  const clearFilters = React.useCallback(() => {
+    filterDispatch({ type: 'CLEAR_ALL' });
+  }, [filterDispatch]);
+
+  // Open date range modal with current values
+  const openDateRangeModal = () => {
+    setTempStartDate(filterState.startDate);
+    setTempEndDate(filterState.endDate);
+    setActiveModal('dateRange');
   };
+
+  // Apply date range from modal
+  const applyDateRange = () => {
+    filterDispatch({
+      type: 'SET_DATE_RANGE',
+      payload: { startDate: tempStartDate, endDate: tempEndDate },
+    });
+    setActiveModal(null);
+  };
+
+  // Delete transaction handler
+  const handleDelete = React.useCallback(
+    (transaction: Transaction) => {
+      const category = transaction.categoryId ? categoryMap.get(transaction.categoryId) : undefined;
+      const categoryName = category?.name || 'this transaction';
+      Alert.alert(
+        'Delete Transaction',
+        `Are you sure you want to delete "${categoryName}" (${formatCurrency(transaction.amount, transaction.currency)})? The balance will be reverted.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await transactionsService.deleteTransaction(transaction.id);
+                await loadTransactions();
+              } catch (err) {
+                const errorMessage = err instanceof AppError
+                  ? err.getUserMessage()
+                  : 'Failed to delete transaction';
+                setError(errorMessage);
+              }
+            },
+          },
+        ]
+      );
+    },
+    [transactionsService, loadTransactions, categoryMap]
+  );
+
+  // Get badge color based on transaction type
+  const getBadgeColor = (type: TransactionType) => {
+    switch (type) {
+      case 'income':
+        return theme.colors.success;
+      case 'expense':
+        return theme.colors.danger;
+      case 'transfer':
+        return theme.colors.secondary;
+    }
+  };
+
+  // Format transaction value with appropriate sign
+  const formatTransactionValue = (transaction: Transaction) => {
+    const account = accountMap.get(transaction.accountId);
+    const currency = account?.currency || transaction.currency;
+    const formatted = formatCurrency(transaction.amount, currency);
+
+    if (transaction.type === 'income') {
+      return `+${formatted}`;
+    } else if (transaction.type === 'expense') {
+      return `-${formatted}`;
+    }
+    return formatted;
+  };
+
+  // Get transaction subtitle
+  const getTransactionSubtitle = (transaction: Transaction) => {
+    const account = accountMap.get(transaction.accountId);
+    const category = transaction.categoryId ? categoryMap.get(transaction.categoryId) : undefined;
+    const parts: string[] = [];
+
+    if (account) {
+      parts.push(account.name);
+    }
+
+    if (transaction.type === 'transfer' && transaction.toAccountId) {
+      const toAccount = accountMap.get(transaction.toAccountId);
+      if (toAccount) {
+        parts[0] = `${account?.name || 'Unknown'} → ${toAccount.name}`;
+      }
+    }
+
+    if (category) {
+      parts.push(category.icon ? `${category.icon} ${category.name}` : category.name);
+    }
+
+    return parts.join(' • ');
+  };
+
+  // Render transaction item
+  const renderTransaction = ({ item: transaction }: { item: Transaction }) => {
+    // For transfers, show "Transfer" instead of category name
+    let displayTitle: string;
+    if (transaction.type === 'transfer') {
+      displayTitle = 'Transfer';
+    } else {
+      const category = categoryMap.get(transaction.categoryId || '');
+      displayTitle = category
+        ? category.name
+        : 'Uncategorized';
+    }
+    if (transaction.recurringTransactionId) {
+      displayTitle = `🔁 ${displayTitle}`;
+    }
+
+    return (
+      <View style={styles.transactionItem}>
+        <TouchableOpacity
+          style={styles.transactionContent}
+          onPress={() => router.push(`/edit-transaction?id=${transaction.id}`)}
+        >
+          <View style={styles.transactionMain}>
+            <Text style={styles.transactionTitle}>{displayTitle}</Text>
+            <Text style={styles.transactionSubtitle}>
+              {/* F-052: Date removed since day header shows it */}
+              {getTransactionSubtitle(transaction)}{transaction.notes ? ` • ${transaction.notes}` : ''}
+            </Text>
+          </View>
+        <View style={styles.transactionRight}>
+          <Text
+            style={[
+              styles.transactionAmount,
+              {
+                color:
+                  transaction.type === 'income'
+                    ? theme.colors.success
+                    : transaction.type === 'expense'
+                    ? theme.colors.danger
+                    : theme.colors.textPrimary,
+              },
+            ]}
+          >
+            {formatTransactionValue(transaction)}
+          </Text>
+          <View style={[styles.badge, { backgroundColor: getBadgeColor(transaction.type) }]}>
+            <Text style={styles.badgeText}>
+              {transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+      <View style={styles.transactionActions}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => router.push(`/edit-transaction?id=${transaction.id}`)}
+        >
+          <Text style={styles.actionButtonText}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.deleteButton]}
+          onPress={() => handleDelete(transaction)}
+        >
+          <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+    );
+  };
+
+  // F-051: Calculate monthly summary from loaded transactions
+  const monthlySummary = React.useMemo(() => {
+    let totalIncome = 0;
+    let totalExpenses = 0;
+
+    for (const tx of filteredTransactions) {
+      if (tx.type === 'income') {
+        totalIncome += tx.amount;
+      } else if (tx.type === 'expense') {
+        totalExpenses += tx.amount;
+      }
+      // Transfers are excluded from summary
+    }
+
+    // F-053: Calculate actual account balance (not filtered by date)
+    let totalBalance = 0;
+    if (filterState.accountId) {
+      // Show balance of selected account
+      const account = accountMap.get(filterState.accountId);
+      totalBalance = account?.balance || 0;
+    } else {
+      // Show sum of all account balances
+      for (const account of accounts) {
+        totalBalance += account.balance;
+      }
+    }
+
+    return {
+      totalIncome,
+      totalExpenses,
+      netTotal: totalIncome - totalExpenses,
+      totalBalance,
+    };
+  }, [filteredTransactions, filterState.accountId, accountMap, accounts]);
 
   // Build summary items for SummaryCard
   const summaryItems: SummaryItem[] = React.useMemo(() => {
-    return [
-      {
-        label: 'Income',
-        value: summary?.totalIncome ?? 0,
-        type: 'income' as const,
-      },
-      {
-        label: 'Expenses',
-        value: summary?.totalExpenses ?? 0,
-        type: 'expense' as const,
-      },
-      {
-        label: 'Net',
-        value: summary?.netBalance ?? 0,
-        type: 'net' as const,
-      },
+    const items: SummaryItem[] = [
+      { label: 'Income', value: monthlySummary.totalIncome, type: 'income' },
+      { label: 'Expenses', value: monthlySummary.totalExpenses, type: 'expense' },
+      { label: 'Net', value: monthlySummary.netTotal, type: 'net' },
     ];
-  }, [summary]);
 
-  // Convert breakdown data to PieChart format
-  // Use consistent chart colors from @cashmgr/ui (same as web/desktop)
-  const pieChartData = React.useMemo(() => {
-    return breakdown.map((item, index) => ({
-      id: item.categoryId,
-      label: item.categoryName,
-      value: item.total,
-      color: getCategoryColor(index, filter.type),
-    }));
-  }, [breakdown, filter.type]);
+    // F-053: Only show Balance when viewing account-specific transactions
+    if (filterState.accountId) {
+      items.push({ label: 'Balance', value: monthlySummary.totalBalance, type: 'default' });
+    }
 
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefreshing}
-          onRefresh={handleRefresh}
-          tintColor={theme.colors.primary}
-        />
+    return items;
+  }, [monthlySummary, filterState.accountId]);
+
+  // F-052: Group transactions by day for SectionList
+  const dailyGroups = React.useMemo((): DailyGroup[] => {
+    const groups = new Map<string, DailyGroup>();
+
+    for (const tx of filteredTransactions) {
+      const date = tx.date; // YYYY-MM-DD
+
+      if (!groups.has(date)) {
+        const dateObj = new Date(date + 'T00:00:00');
+        groups.set(date, {
+          date,
+          dayNumber: date.slice(8, 10), // "05"
+          weekday: WEEKDAYS[dateObj.getDay()],
+          data: [],
+          dayIncome: 0,
+          dayExpenses: 0,
+        });
       }
-    >
-      <StatusBar style={statusStyle} />
 
-      {/* F-030: Net Balance Card - only show when conversion is needed */}
-      {totalBalance && totalBalance.isConverted && (
-        <View style={styles.netBalanceCard}>
-          <View style={styles.netBalanceHeader}>
-            <Text style={styles.netBalanceLabel}>
-              Net ({totalBalance.primaryCurrency?.id || 'USD'})
-            </Text>
-            <Text style={styles.netBalanceSubtitle}>
-              {totalBalance.isConverted ? 'Converted to primary currency' : getPeriodLabel()}
-            </Text>
-          </View>
-          <Text
-            style={[
-              styles.netBalanceAmount,
-              { color: totalBalance.totalBalance >= 0 ? theme.colors.success : theme.colors.danger },
-            ]}
-          >
-            {totalBalance.isConverted && '≈ '}
-            {totalBalance.formattedBalance}
+      const group = groups.get(date)!;
+      group.data.push(tx);
+
+      if (tx.type === 'income') {
+        group.dayIncome += tx.amount;
+      } else if (tx.type === 'expense') {
+        group.dayExpenses += tx.amount;
+      }
+    }
+
+    // Sort by date descending (most recent first)
+    return Array.from(groups.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }, [filteredTransactions]);
+
+  // F-052: Render day section header
+  const renderSectionHeader = ({ section }: { section: DailyGroup }) => (
+    <View style={styles.dayHeader}>
+      <Text style={styles.dayHeaderDate}>
+        {section.dayNumber} {section.weekday}
+      </Text>
+      <View style={styles.dayHeaderTotals}>
+        {section.dayIncome > 0 && (
+          <Text style={[styles.dayHeaderAmount, { color: theme.colors.success }]}>
+            +{formatCurrency(section.dayIncome)}
           </Text>
-        </View>
-      )}
-
-      {/* Summary Cards - Using SummaryCard component */}
-      <SummaryCard items={summaryItems} currency="USD" style={styles.summaryCard} />
-
-      {/* Type Toggle */}
-      <View style={styles.toggleContainer}>
-        <TouchableOpacity
-          style={[styles.toggleButton, filter.type === 'expense' && styles.toggleActive]}
-          onPress={() => setType('expense')}
-        >
-          <Text
-            style={[styles.toggleText, filter.type === 'expense' && styles.toggleTextActive]}
-          >
-            Expenses
+        )}
+        {section.dayExpenses > 0 && (
+          <Text style={[styles.dayHeaderAmount, { color: theme.colors.danger }]}>
+            -{formatCurrency(section.dayExpenses)}
           </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleButton, filter.type === 'income' && styles.toggleActive]}
-          onPress={() => setType('income')}
-        >
-          <Text style={[styles.toggleText, filter.type === 'income' && styles.toggleTextActive]}>
-            Income
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Period Mode Toggle */}
-      <View style={styles.periodContainer}>
-        {(['monthly', 'yearly', 'custom'] as PeriodMode[]).map((mode) => (
-          <TouchableOpacity
-            key={mode}
-            style={[styles.periodButton, filter.periodMode === mode && styles.periodActive]}
-            onPress={() => setPeriodMode(mode)}
-          >
-            <Text
-              style={[
-                styles.periodText,
-                filter.periodMode === mode && styles.periodTextActive,
-              ]}
-            >
-              {mode.charAt(0).toUpperCase() + mode.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Month Navigator (for monthly mode) - Using MonthNavigator component */}
-      {filter.periodMode === 'monthly' && (
-        <MonthNavigator
-          month={filter.month ?? 1}
-          year={filter.year}
-          onNavigate={handleMonthNavigate}
-          style={styles.monthNavigator}
-        />
-      )}
-
-      {/* B-002: Year navigation (only for yearly mode) */}
-      {filter.periodMode === 'yearly' && (
-        <View style={styles.yearNavContainer}>
-          <TouchableOpacity
-            style={styles.yearNavButton}
-            onPress={() => navigateYear('prev')}
-          >
-            <Text style={styles.yearNavButtonText}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.yearNavLabel}>{filter.year}</Text>
-          <TouchableOpacity
-            style={styles.yearNavButton}
-            onPress={() => navigateYear('next')}
-          >
-            <Text style={styles.yearNavButtonText}>→</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* B-002: Custom date range inputs */}
-      {filter.periodMode === 'custom' && (
-        <View style={styles.customDateContainer}>
-          <DateInput
-            label="From Date"
-            value={customStartDate}
-            onChange={setCustomStartDate}
-          />
-          <DateInput
-            label="To Date"
-            value={customEndDate}
-            onChange={setCustomEndDate}
-          />
-        </View>
-      )}
-
-      {/* Pie Chart - Using extracted PieChart component */}
-      <View style={styles.chartCard}>
-        <Text style={styles.chartTitle}>
-          {filter.type === 'expense' ? 'Expense' : 'Income'} Breakdown
-        </Text>
-        <Text style={styles.chartSubtitle}>{getPeriodLabel()}</Text>
-        {loading ? (
-          <View style={styles.chartLoading}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-          </View>
-        ) : breakdown.length === 0 ? (
-          <View style={styles.chartEmpty}>
-            <Text style={styles.emptyText}>No transactions for this period</Text>
-          </View>
-        ) : (
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.chartContainer}
-            onPress={() => setSelectedSliceId(null)}
-          >
-            <PieChart
-              data={pieChartData}
-              size={200}
-              innerRadius={0}
-              selectedId={selectedSliceId}
-              onSelectSlice={setSelectedSliceId}
-            />
-          </TouchableOpacity>
         )}
       </View>
+    </View>
+  );
 
-      {/* Category List */}
-      <View style={styles.categoriesCard}>
-        <Text style={styles.categoriesTitle}>Categories</Text>
-        {breakdown.map((item, index) => {
-          const percentage = item.percentage?.toFixed(1) || '0.0';
-          const categoryColor = getCategoryColor(index, filter.type);
-          return (
-            <View key={item.categoryId}>
-              <TouchableOpacity
-                style={[
-                  styles.categoryItem,
-                  selectedSliceId === item.categoryId && styles.categoryItemSelected,
-                ]}
-                onPress={() => setSelectedSliceId(item.categoryId)}
-              >
-                <View style={styles.categoryLeft}>
-                  {/* Color-coded circle with icon (matches web/desktop) */}
-                  <View
-                    style={[
-                      styles.categoryColorBadge,
-                      { backgroundColor: categoryColor },
-                    ]}
-                  >
-                    <Text style={styles.categoryIcon}>{item.categoryIcon || '📁'}</Text>
-                  </View>
-                  {/* Name + budget badge stacked vertically */}
-                  <View style={styles.categoryNameColumn}>
-                    <Text style={styles.categoryName}>{item.categoryName}</Text>
-                    {filter.periodMode === 'monthly' && filter.type === 'expense' && (() => {
-                      const budget = budgetMap.get(item.categoryId);
-                      if (!budget) return null;
-                      const isOver = budget.spent > budget.amount;
-                      return (
-                        <View style={[styles.budgetBadge, isOver ? styles.budgetBadgeOver : styles.budgetBadgeOn]}>
-                          <Text style={[styles.budgetBadgeText, isOver ? styles.budgetBadgeTextOver : styles.budgetBadgeTextOn]}>
-                            {isOver ? 'Over budget' : 'On budget'}
-                          </Text>
-                        </View>
-                      );
-                    })()}
-                  </View>
-                </View>
-                <View style={styles.categoryRight}>
-                  <Text style={styles.categoryAmount}>{formatCurrency(item.total)}</Text>
-                  <Text style={styles.categoryPercent}>{percentage}%</Text>
-                </View>
-              </TouchableOpacity>
-              {/* Sub-categories, indented, percentage relative to parent's total */}
-              {item.subcategories?.map((sub) => {
-                const subPercentage = sub.percentage?.toFixed(1) || '0.0';
-                return (
-                  <TouchableOpacity
-                    key={sub.categoryId}
-                    style={[
-                      styles.subcategoryItem,
-                      selectedSliceId === sub.categoryId && styles.categoryItemSelected,
-                    ]}
-                    onPress={() => setSelectedSliceId(sub.categoryId)}
-                  >
-                    <View style={styles.categoryLeft}>
-                      <View
-                        style={[
-                          styles.subcategoryColorBadge,
-                          { backgroundColor: categoryColor },
-                        ]}
-                      >
-                        <Text style={styles.subcategoryIcon}>{sub.categoryIcon || '📁'}</Text>
-                      </View>
-                      <View style={styles.categoryNameColumn}>
-                        <Text style={styles.subcategoryName}>{sub.categoryName}</Text>
-                        {filter.periodMode === 'monthly' && filter.type === 'expense' && (() => {
-                          const budget = budgetMap.get(sub.categoryId);
-                          if (!budget) return null;
-                          const isOver = budget.spent > budget.amount;
-                          return (
-                            <View style={[styles.budgetBadge, isOver ? styles.budgetBadgeOver : styles.budgetBadgeOn]}>
-                              <Text style={[styles.budgetBadgeText, isOver ? styles.budgetBadgeTextOver : styles.budgetBadgeTextOn]}>
-                                {isOver ? 'Over budget' : 'On budget'}
-                              </Text>
-                            </View>
-                          );
-                        })()}
-                      </View>
-                    </View>
-                    <View style={styles.categoryRight}>
-                      <Text style={styles.subcategoryAmount}>{formatCurrency(sub.total)}</Text>
-                      <Text style={styles.categoryPercent}>{subPercentage}% of {item.categoryName}</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          );
-        })}
+  // Empty state
+  const renderEmpty = () => (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyTitle}>
+        {derived.activeFilterCount > 0 || filterState.searchQuery
+          ? 'No transactions found'
+          : `No transactions for ${derived.labels.month}`}
+      </Text>
+      <Text style={styles.emptyDescription}>
+        {derived.activeFilterCount > 0 || filterState.searchQuery
+          ? 'Try adjusting your filters or clear them to see all transactions.'
+          : 'Add a transaction or navigate to a different month.'}
+      </Text>
+      {derived.activeFilterCount > 0 || filterState.searchQuery ? (
+        <TouchableOpacity style={styles.emptyButton} onPress={clearFilters}>
+          <Text style={styles.emptyButtonText}>Clear filters</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity style={styles.emptyButton} onPress={() => router.push({ pathname: '/add-transaction', params: { source: 'transactions' } })}>
+          <Text style={styles.emptyButtonText}>Add transaction</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  // Render search bar separately to prevent TextInput from losing focus
+  const renderSearchBar = () => (
+    <SearchBar
+      value={filterState.searchQuery}
+      onChangeText={handleSearchChange}
+      onClear={handleSearchClear}
+      theme={theme}
+      styles={styles}
+    />
+  );
+
+  // Render header with all components
+  // SearchBar is rendered via renderSearchBar to prevent focus loss
+  const renderHeader = React.useMemo(() => (
+    <View style={styles.headerSection}>
+      {/* F-050: Month Navigator - only show when custom date filter is not active */}
+      {!filterState.startDate && !filterState.endDate && (
+        <MonthNavigator
+          month={filterState.currentMonth}
+          year={filterState.currentYear}
+          onNavigate={(direction) => filterDispatch({ type: 'NAVIGATE_MONTH', payload: direction })}
+          style={styles.monthNav}
+        />
+      )}
+
+      {/* F-053: Account Context Banner */}
+      {filterState.accountId && accountMap.get(filterState.accountId) && (
+        <View style={styles.accountBanner}>
+          <Text style={styles.accountBannerText}>
+            Viewing: {accountMap.get(filterState.accountId)?.name}
+          </Text>
+          <TouchableOpacity
+            onPress={() => filterDispatch({ type: 'SET_ACCOUNT', payload: '' })}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={styles.accountBannerClear}>Clear</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* F-051: Monthly Summary Bar */}
+      <SummaryCard items={summaryItems} style={styles.summaryBar} />
+
+      {/* Search bar - rendered separately to prevent focus loss */}
+      {renderSearchBar()}
+
+      {/* Filter chips */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterChipsContainer}
+      >
+        <FilterChip
+          label={derived.labels.type}
+          isActive={!!filterState.type}
+          onPress={() => setActiveModal('type')}
+          onClear={filterState.type ? () => filterDispatch({ type: 'SET_TYPE', payload: '' }) : undefined}
+        />
+        <FilterChip
+          label={derived.labels.account}
+          isActive={!!filterState.accountId}
+          onPress={() => setActiveModal('account')}
+          onClear={filterState.accountId ? () => filterDispatch({ type: 'SET_ACCOUNT', payload: '' }) : undefined}
+        />
+        <FilterChip
+          label={derived.labels.category}
+          isActive={!!filterState.categoryId}
+          onPress={() => setActiveModal('category')}
+          onClear={filterState.categoryId ? () => filterDispatch({ type: 'SET_CATEGORY', payload: '' }) : undefined}
+        />
+        <FilterChip
+          label={derived.labels.dateRange}
+          isActive={!!(filterState.startDate || filterState.endDate)}
+          onPress={openDateRangeModal}
+          onClear={
+            (filterState.startDate || filterState.endDate)
+              ? () => filterDispatch({ type: 'SET_DATE_RANGE', payload: { startDate: '', endDate: '' } })
+              : undefined
+          }
+        />
+        {derived.activeFilterCount > 0 && (
+          <TouchableOpacity style={styles.clearAllButton} onPress={clearFilters}>
+            <Text style={styles.clearAllText}>Clear all</Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+    </View>
+  ), [
+    filterState.startDate,
+    filterState.endDate,
+    filterState.currentMonth,
+    filterState.currentYear,
+    filterState.accountId,
+    filterState.type,
+    filterState.categoryId,
+    derived.labels.type,
+    derived.labels.account,
+    derived.labels.category,
+    derived.labels.dateRange,
+    derived.activeFilterCount,
+    accountMap,
+    summaryItems,
+    filterDispatch,
+    styles,
+    theme,
+    setActiveModal,
+    renderSearchBar,
+  ]);
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={styles.loadingText}>Loading transactions...</Text>
       </View>
-    </ScrollView>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {renderHeader}
+
+      {/* F-052: SectionList grouped by day */}
+      <SectionList
+        sections={dailyGroups}
+        keyExtractor={(item) => item.id}
+        renderItem={renderTransaction}
+        renderSectionHeader={renderSectionHeader}
+        ListEmptyComponent={renderEmpty}
+        contentContainerStyle={filteredTransactions.length === 0 ? styles.emptyContainer : styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+        }
+        ItemSeparatorComponent={() => <View style={styles.transactionSeparator} />}
+        SectionSeparatorComponent={() => <View style={styles.sectionSeparator} />}
+        stickySectionHeadersEnabled={false}
+      />
+
+      <TouchableOpacity style={styles.fab} onPress={() => router.push({ pathname: '/add-transaction', params: { source: 'transactions' } })}>
+        <Text style={styles.fabText}>+</Text>
+      </TouchableOpacity>
+
+      {/* Modals */}
+      <SelectionModal
+        visible={activeModal === 'type'}
+        title="Select Type"
+        options={TYPE_OPTIONS}
+        selectedValue={filterState.type}
+        onSelect={(value) => {
+          filterDispatch({ type: 'SET_TYPE', payload: value });
+          setActiveModal(null);
+        }}
+        onClose={() => setActiveModal(null)}
+      />
+
+      <SelectionModal
+        visible={activeModal === 'account'}
+        title="Select Account"
+        options={[
+          { label: 'All Accounts', value: '' },
+          ...accounts.map((a) => ({ label: a.name, value: a.id })),
+        ]}
+        selectedValue={filterState.accountId}
+        onSelect={(value) => {
+          filterDispatch({ type: 'SET_ACCOUNT', payload: value });
+          setActiveModal(null);
+        }}
+        onClose={() => setActiveModal(null)}
+      />
+
+      <SelectionModal
+        visible={activeModal === 'category'}
+        title="Select Category"
+        options={[
+          { label: 'All Categories', value: '' },
+          ...flattenedCategories.map((c) => ({ label: c.label, value: c.id })),
+        ]}
+        selectedValue={filterState.categoryId}
+        onSelect={(value) => {
+          filterDispatch({ type: 'SET_CATEGORY', payload: value });
+          setActiveModal(null);
+        }}
+        onClose={() => setActiveModal(null)}
+      />
+
+      <DateRangeModal
+        visible={activeModal === 'dateRange'}
+        startDate={tempStartDate}
+        endDate={tempEndDate}
+        onStartDateChange={setTempStartDate}
+        onEndDateChange={setTempEndDate}
+        onApply={applyDateRange}
+        onClose={() => setActiveModal(null)}
+      />
+    </View>
   );
 }
 
@@ -489,301 +787,253 @@ const createStyles = (theme: Theme) =>
       flex: 1,
       backgroundColor: theme.colors.background,
     },
-    content: {
-      paddingBottom: 32,
-    },
-    // Net Balance Card
-    netBalanceCard: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 12,
-      padding: 20,
-      marginHorizontal: 16,
-      marginTop: 16,
-      marginBottom: 8,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    netBalanceHeader: {
-      marginBottom: 8,
-    },
-    netBalanceLabel: {
-      fontSize: 14,
-      fontWeight: fontWeight(600),
-      color: theme.colors.textSecondary,
-      marginBottom: 4,
-    },
-    netBalanceSubtitle: {
-      fontSize: 12,
-      color: theme.colors.textSecondary,
-    },
-    netBalanceAmount: {
-      fontSize: 32,
-      fontWeight: fontWeight(700),
-    },
-    // Summary Card
-    summaryCard: {
-      marginHorizontal: 16,
-      marginBottom: 16,
-    },
-    // Type Toggle
-    toggleContainer: {
-      flexDirection: 'row',
-      gap: 8,
-      marginHorizontal: 16,
-      marginBottom: 16,
-    },
-    toggleButton: {
-      flex: 1,
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      borderRadius: 8,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+    centered: {
+      justifyContent: 'center',
       alignItems: 'center',
     },
-    toggleActive: {
-      backgroundColor: theme.colors.primary,
-      borderColor: theme.colors.primary,
+    loadingText: {
+      marginTop: theme.spacing.md,
+      color: theme.colors.textSecondary,
     },
-    toggleText: {
-      fontSize: 16,
+    errorBanner: {
+      backgroundColor: '#fee',
+      padding: theme.spacing.md,
+      marginHorizontal: theme.spacing.lg,
+      marginBottom: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      borderWidth: 1,
+      borderColor: '#fcc',
+    },
+    errorText: {
+      color: '#c00',
+      fontWeight: fontWeight(500),
+    },
+    // Header section with search and filters
+    headerSection: {
+      paddingBottom: theme.spacing.md,
+    },
+    monthNav: {
+      marginHorizontal: theme.spacing.lg,
+      marginBottom: theme.spacing.sm,
+    },
+    // F-053: Account context banner styles
+    accountBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: `${theme.colors.primary}15`,
+      borderRadius: theme.radii.md,
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+      marginHorizontal: theme.spacing.lg,
+      marginBottom: theme.spacing.sm,
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+    },
+    accountBannerText: {
+      fontSize: theme.typography.body.fontSize,
       fontWeight: fontWeight(600),
       color: theme.colors.textPrimary,
     },
-    toggleTextActive: {
-      color: '#fff',
+    accountBannerClear: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: fontWeight(600),
+      color: theme.colors.primary,
     },
-    // Period Mode Toggle
-    periodContainer: {
+    // F-051: Monthly summary bar styles
+    summaryBar: {
+      marginHorizontal: theme.spacing.lg,
+      marginBottom: theme.spacing.sm,
+    },
+    searchContainer: {
       flexDirection: 'row',
-      gap: 8,
-      marginHorizontal: 16,
-      marginBottom: 16,
-    },
-    periodButton: {
-      flex: 1,
-      paddingVertical: 8,
-      paddingHorizontal: 12,
-      borderRadius: 8,
+      alignItems: 'center',
+      marginHorizontal: theme.spacing.lg,
+      marginBottom: theme.spacing.sm,
       backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.md,
       borderWidth: 1,
       borderColor: theme.colors.border,
-      alignItems: 'center',
     },
-    periodActive: {
-      backgroundColor: `${theme.colors.primary}15`,
-      borderColor: theme.colors.primary,
+    searchInput: {
+      flex: 1,
+      height: 40,
+      paddingHorizontal: theme.spacing.md,
+      fontSize: theme.typography.body.fontSize,
+      color: theme.colors.textPrimary,
     },
-    periodText: {
-      fontSize: 14,
-      fontWeight: fontWeight(500),
+    searchClear: {
+      paddingHorizontal: theme.spacing.md,
+    },
+    searchClearText: {
+      fontSize: 20,
       color: theme.colors.textSecondary,
     },
-    periodTextActive: {
+    // Filter chips
+    filterChipsContainer: {
+      paddingHorizontal: theme.spacing.lg,
+      gap: theme.spacing.sm,
+      flexDirection: 'row',
+    },
+    clearAllButton: {
+      paddingVertical: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.sm,
+    },
+    clearAllText: {
+      fontSize: theme.typography.caption.fontSize,
       color: theme.colors.primary,
       fontWeight: fontWeight(600),
     },
-    // Month Navigator
-    monthNavigator: {
-      marginHorizontal: 16,
-      marginBottom: 16,
+    // List styles
+    listContent: {
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: 100,
     },
-    // Year Navigation
-    yearNavContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+    transactionItem: {
       backgroundColor: theme.colors.surface,
-      borderRadius: 8,
-      padding: 12,
-      marginHorizontal: 16,
-      marginBottom: 16,
+      borderRadius: theme.radii.md,
       borderWidth: 1,
       borderColor: theme.colors.border,
+      overflow: 'hidden',
     },
-    yearNavButton: {
-      padding: 4,
-      borderRadius: 4,
-    },
-    yearNavButtonText: {
-      fontSize: 18,
-      color: theme.colors.textPrimary,
-      fontWeight: fontWeight(500),
-    },
-    yearNavLabel: {
-      fontSize: 16,
-      fontWeight: fontWeight(600),
-      color: theme.colors.textPrimary,
-    },
-    // Custom Date Range
-    customDateContainer: {
-      marginHorizontal: 16,
-      marginBottom: 16,
-      gap: 12,
-    },
-    // Chart Card
-    chartCard: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 12,
-      padding: 20,
-      marginHorizontal: 16,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    chartTitle: {
-      fontSize: 18,
-      fontWeight: fontWeight(600),
-      color: theme.colors.textPrimary,
-      marginBottom: 4,
-    },
-    chartSubtitle: {
-      fontSize: 14,
-      color: theme.colors.textSecondary,
-      marginBottom: 20,
-    },
-    chartContainer: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 20,
-    },
-    chartLoading: {
-      height: 200,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    chartEmpty: {
-      height: 200,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    emptyText: {
-      fontSize: 16,
-      color: theme.colors.textSecondary,
-    },
-    // Categories List
-    categoriesCard: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 12,
-      padding: 20,
-      marginHorizontal: 16,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    categoriesTitle: {
-      fontSize: 18,
-      fontWeight: fontWeight(600),
-      color: theme.colors.textPrimary,
-      marginBottom: 16,
-    },
-    categoryItem: {
+    transactionContent: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 12,
-      paddingHorizontal: 12,
-      borderRadius: 8,
-      marginBottom: 8,
+      padding: theme.spacing.md,
+      gap: theme.spacing.md,
     },
-    categoryItemSelected: {
-      backgroundColor: `${theme.colors.primary}10`,
-    },
-    categoryLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
+    transactionMain: {
       flex: 1,
     },
-    categoryColorBadge: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    categoryIcon: {
-      fontSize: 16,
-    },
-    categoryNameColumn: {
-      flex: 1,
-      flexDirection: 'column',
-    },
-    categoryName: {
-      fontSize: 16,
-      fontWeight: fontWeight(500),
+    transactionTitle: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: fontWeight(600),
       color: theme.colors.textPrimary,
     },
-    categoryRight: {
+    transactionSubtitle: {
+      fontSize: theme.typography.caption.fontSize,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xs,
+    },
+    transactionRight: {
       alignItems: 'flex-end',
+      gap: theme.spacing.xs,
     },
-    categoryAmount: {
-      fontSize: 16,
+    transactionAmount: {
+      fontSize: theme.typography.body.fontSize,
       fontWeight: fontWeight(600),
-      color: theme.colors.textPrimary,
-      marginBottom: 2,
     },
-    categoryPercent: {
-      fontSize: 12,
-      color: theme.colors.textSecondary,
+    badge: {
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: 2,
+      borderRadius: theme.radii.sm,
     },
-    subcategoryItem: {
+    badgeText: {
+      fontSize: 10,
+      fontWeight: fontWeight(600),
+      color: '#ffffff',
+    },
+    transactionActions: {
+      flexDirection: 'row',
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    actionButton: {
+      flex: 1,
+      paddingVertical: theme.spacing.sm,
+      alignItems: 'center',
+    },
+    actionButtonText: {
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: fontWeight(600),
+      color: theme.colors.primary,
+    },
+    deleteButton: {
+      borderLeftWidth: 1,
+      borderLeftColor: theme.colors.border,
+    },
+    deleteButtonText: {
+      color: theme.colors.danger,
+    },
+    // F-052: Day header styles
+    dayHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      marginLeft: 24,
-      borderRadius: 8,
-      marginBottom: 8,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      backgroundColor: theme.colors.background,
+      marginTop: theme.spacing.md,
     },
-    subcategoryColorBadge: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
-      alignItems: 'center',
+    dayHeaderDate: {
+      fontSize: theme.typography.body.fontSize,
+      fontWeight: fontWeight(600),
+      color: theme.colors.textPrimary,
+    },
+    dayHeaderTotals: {
+      flexDirection: 'row',
+      gap: theme.spacing.md,
+    },
+    dayHeaderAmount: {
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: fontWeight(600),
+    },
+    transactionSeparator: {
+      height: theme.spacing.sm,
+    },
+    sectionSeparator: {
+      height: theme.spacing.sm,
+    },
+    emptyContainer: {
+      flex: 1,
       justifyContent: 'center',
-      opacity: 0.6,
+      alignItems: 'center',
+      padding: theme.spacing.lg,
     },
-    subcategoryIcon: {
-      fontSize: 13,
+    emptyState: {
+      alignItems: 'center',
     },
-    subcategoryName: {
-      fontSize: 14,
-      fontWeight: fontWeight(500),
+    emptyTitle: {
+      fontSize: theme.typography.h2.fontSize,
+      fontWeight: fontWeight(theme.typography.h2.fontWeight),
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+    },
+    emptyDescription: {
+      fontSize: theme.typography.body.fontSize,
       color: theme.colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: theme.spacing.lg,
     },
-    subcategoryAmount: {
-      fontSize: 14,
+    emptyButton: {
+      backgroundColor: theme.colors.primary,
+      paddingHorizontal: theme.spacing.lg,
+      paddingVertical: theme.spacing.md,
+      borderRadius: theme.radii.md,
+    },
+    emptyButtonText: {
+      color: '#ffffff',
+      fontSize: theme.typography.body.fontSize,
       fontWeight: fontWeight(600),
-      color: theme.colors.textSecondary,
-      marginBottom: 2,
     },
-    budgetBadge: {
-      marginTop: 2,
-      paddingHorizontal: 5,
-      paddingVertical: 1,
-      borderRadius: 8,
-      alignSelf: 'flex-start',
+    fab: {
+      position: 'absolute',
+      bottom: theme.spacing.lg,
+      right: theme.spacing.lg,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: theme.colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+      elevation: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
     },
-    budgetBadgeOn: {
-      backgroundColor: `${theme.colors.success}1a`,
-    },
-    budgetBadgeOver: {
-      backgroundColor: `${theme.colors.danger}1a`,
-    },
-    budgetBadgeText: {
-      fontSize: 9,
-      fontWeight: fontWeight(600),
-      letterSpacing: 0.3,
-      textTransform: 'uppercase',
-    },
-    budgetBadgeTextOn: {
-      color: theme.colors.success,
-    },
-    budgetBadgeTextOver: {
-      color: theme.colors.danger,
+    fabText: {
+      fontSize: 28,
+      color: '#ffffff',
+      fontWeight: fontWeight(300),
     },
   });

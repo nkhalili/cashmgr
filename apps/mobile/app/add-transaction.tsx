@@ -292,7 +292,7 @@ export default function AddTransactionScreen() {
       }
 
       setTimeout(() => {
-        router.replace('/transactions');
+        router.replace('/');
       }, 1000);
     } catch (err) {
       const errorMessage = err instanceof AppError

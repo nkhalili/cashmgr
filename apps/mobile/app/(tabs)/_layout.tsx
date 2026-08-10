@@ -29,7 +29,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen
-        name="transactions"
+        name="index"
         options={{
           title: 'Transactions',
           tabBarIcon: ({ color, size }) => (
@@ -38,7 +38,7 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="index"
+        name="dashboard"
         options={{
           title: 'Dashboard',
           tabBarIcon: ({ color, size }) => (
