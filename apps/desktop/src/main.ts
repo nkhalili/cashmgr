@@ -1,6 +1,75 @@
-import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, protocol, shell } from 'electron';
+import { autoUpdater, UpdateDownloadedEvent } from 'electron-updater';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
+import { ErrorHandler, setLogger } from '@cashmgr/core';
+import { DesktopFileLogger } from './logger';
+
+setLogger(new DesktopFileLogger());
+
+process.on('uncaughtException', (error) => {
+  ErrorHandler.handle(error, 'main:uncaughtException');
+  dialog.showMessageBoxSync({
+    type: 'error',
+    title: 'Unexpected Error',
+    message: 'Cash Mgr. encountered an unexpected error and needs to close.',
+    detail: error.message,
+    buttons: ['OK'],
+  });
+  app.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  ErrorHandler.handle(reason, 'main:unhandledRejection');
+});
+
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = false;
+
+autoUpdater.on('update-downloaded', (info: UpdateDownloadedEvent) => {
+  mainWindow?.webContents.send('update-downloaded', {
+    version: info.version,
+    releaseNotes: info.releaseNotes,
+  });
+});
+
+let isCheckingForUpdates = false;
+
+function checkForUpdatesManually() {
+  if (!app.isPackaged) {
+    dialog.showMessageBox({ type: 'info', message: 'Update checks are only available in production builds.', buttons: ['OK'] });
+    return;
+  }
+  if (isCheckingForUpdates) return;
+  isCheckingForUpdates = true;
+
+  const onAvailable = () => {
+    cleanup();
+    dialog.showMessageBox({ type: 'info', title: 'Update Available', message: 'A new update is downloading in the background.\nYou will be notified when it is ready to install.', buttons: ['OK'] });
+  };
+  const onNotAvailable = () => {
+    cleanup();
+    dialog.showMessageBox({ type: 'info', title: 'No Updates Available', message: `Cash Mgr. ${app.getVersion()} is the latest version.`, buttons: ['OK'] });
+  };
+  const cleanup = () => {
+    isCheckingForUpdates = false;
+    autoUpdater.off('update-available', onAvailable);
+    autoUpdater.off('update-not-available', onNotAvailable);
+  };
+
+  autoUpdater.once('update-available', onAvailable);
+  autoUpdater.once('update-not-available', onNotAvailable);
+  autoUpdater.checkForUpdates().catch((err: Error) => {
+    cleanup();
+    dialog.showMessageBox({ type: 'error', title: 'Update Check Failed', message: err.message, buttons: ['OK'] });
+  });
+}
+
+function scheduleUpdateCheck() {
+  if (!app.isPackaged) return;
+  setTimeout(() => autoUpdater.checkForUpdates(), 10_000);
+  setInterval(() => autoUpdater.checkForUpdates(), 4 * 60 * 60 * 1000);
+}
 
 function buildMenu() {
   const isMac = process.platform === 'darwin';
@@ -57,8 +126,46 @@ function buildMenu() {
       label: 'Help',
       submenu: [
         {
+          label: 'About Cash Mgr.',
+          click: () => {
+            const iconPath = path.join(__dirname, '../build/icons/256x256.png');
+            const icon = nativeImage.createFromPath(iconPath);
+            dialog.showMessageBox({
+              type: 'none',
+              icon,
+              title: 'Cash Mgr.',
+              message: 'Cash Mgr.',
+              detail: [
+                'A free, open source, offline-first personal finance manager.',
+                'Manage your money. Own your data.',
+                '',
+                `Version ${app.getVersion()}`,
+              ].join('\n'),
+              buttons: ['OK'],
+            });
+          },
+        },
+        {
+          label: 'Check for Updates…',
+          click: () => checkForUpdatesManually(),
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Source Code',
+          click: () => shell.openExternal('https://github.com/nkhalili/cashmgr'),
+        },
+        {
           label: 'Report an Issue',
           click: () => shell.openExternal('https://github.com/nkhalili/cashmgr/issues'),
+        },
+        { type: 'separator' as const },
+        {
+          label: 'Sponsor on GitHub',
+          click: () => shell.openExternal('https://github.com/sponsors/nkhalili'),
+        },
+        {
+          label: 'Buy Me a Coffee',
+          click: () => shell.openExternal('https://buymeacoffee.com/nkhalili'),
         },
       ],
     },
@@ -128,6 +235,7 @@ app.whenReady().then(() => {
 
   Menu.setApplicationMenu(buildMenu());
   createWindow();
+  scheduleUpdateCheck();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -137,6 +245,17 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+ipcMain.handle('install-update', () => {
+  if (!app.isPackaged) return;
+  autoUpdater.quitAndInstall();
+});
+
+if (!app.isPackaged) {
+  ipcMain.handle('dev:simulate-update', () => {
+    mainWindow?.webContents.send('update-downloaded', { version: '99.0.0', releaseNotes: null });
+  });
+}
 
 ipcMain.handle('db:query', async (_event, sql: string, params: unknown[]) => {
   console.log('Database query:', sql, params);

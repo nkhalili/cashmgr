@@ -9,6 +9,7 @@ export interface Transaction extends BaseEntity {
   categoryId?: string; // Optional for transfers
   toAccountId?: string; // For transfers
   notes?: string;
+  recurringTransactionId?: string; // Set when generated from a recurring template
 }
 
 export interface CreateTransactionInput {
@@ -20,6 +21,7 @@ export interface CreateTransactionInput {
   categoryId?: string; // Optional for transfers
   toAccountId?: string;
   notes?: string;
+  recurringTransactionId?: string; // Internal: set by recurring generation service
 }
 
 export interface UpdateTransactionInput extends Partial<CreateTransactionInput> {

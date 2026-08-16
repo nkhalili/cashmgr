@@ -13,8 +13,8 @@ env:
 
 jobs:
   # ── 1. Determine version and bump manifests ───────────────────────────────
-  #   Stable : triggered by merged PR from release/* into main
-  #   Preview: triggered by pre-release tag push (v*.*.*-*)
+  #   Stable : triggered by merged PR from release/vx.y.z into main
+  #   Preview: triggered by pre-release tag push (v*.*.*-*) on release/vx.y.z
   version-bump:
     runs-on: ubuntu-latest
     permissions:
@@ -22,6 +22,7 @@ jobs:
     outputs:
       version: ${{ steps.set.outputs.version }}
       prerelease: ${{ steps.set.outputs.prerelease }}
+      target: ${{ steps.set.outputs.target }}
     if: >-
       github.actor != 'cashmgr-bot[bot]' &&
       (github.event_name == 'push' ||
@@ -35,23 +36,31 @@ jobs:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
-      # For stable (PR merge): checkout main (base branch, already has merged code)
-      # For preview (tag push): checkout dev (where the bump commit will land)
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ steps.generate_token.outputs.token }}
-          ref: ${{ github.base_ref || 'dev' }}
-
+      # Determine version, prerelease flag, checkout ref, and push target before checkout.
+      # Stable : version from branch name (release/vx.y.z → x.y.z), checkout/push to main.
+      # Preview: version from tag (vx.y.z-label → x.y.z-label), checkout/push to release/vx.y.z.
       - id: set
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             REF="${{ github.event.pull_request.head.ref }}"
-            echo "version=${REF#release/}" >> $GITHUB_OUTPUT
+            VERSION="${REF#release/v}"
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
             echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "target=main" >> $GITHUB_OUTPUT
+            echo "checkout_ref=${{ github.base_ref }}" >> $GITHUB_OUTPUT
           else
-            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+            FULL_VERSION="${GITHUB_REF_NAME#v}"
+            BASE_VERSION="${FULL_VERSION%%-*}"
+            echo "version=${FULL_VERSION}" >> $GITHUB_OUTPUT
             echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "target=release/v${BASE_VERSION}" >> $GITHUB_OUTPUT
+            echo "checkout_ref=release/v${BASE_VERSION}" >> $GITHUB_OUTPUT
           fi
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.generate_token.outputs.token }}
+          ref: ${{ steps.set.outputs.checkout_ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -66,8 +75,7 @@ jobs:
           git config user.name "cashmgr-bot[bot]"
           git add .
           git commit -m "chore: release v${{ steps.set.outputs.version }} [skip ci]"
-          TARGET=${{ steps.set.outputs.prerelease == 'true' && 'dev' || 'main' }}
-          git push origin HEAD:$TARGET
+          git push origin HEAD:${{ steps.set.outputs.target }}
 
   # ── 2. Build and push Docker image for the web app ────────────────────────
   docker:
@@ -78,6 +86,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version-bump.outputs.target }}
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -104,6 +114,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version-bump.outputs.target }}
 
       - name: Build Linux + Windows installers via Docker
         run: |
@@ -137,6 +149,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version-bump.outputs.target }}
 
       - uses: pnpm/action-setup@v3
       - uses: actions/setup-node@v4
@@ -155,7 +169,7 @@ jobs:
           pnpm --filter @cashmgr/desktop build:electron
 
       - name: Package macOS DMG
-        run: pnpm --filter @cashmgr/desktop exec electron-builder --mac
+        run: pnpm --filter @cashmgr/desktop exec electron-builder --mac --publish=never
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
@@ -181,6 +195,8 @@ jobs:
     if: needs.version-bump.outputs.prerelease == 'false'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version-bump.outputs.target }}
 
       - uses: pnpm/action-setup@v3
       - uses: actions/setup-node@v4
@@ -205,6 +221,8 @@ jobs:
     if: needs.version-bump.outputs.prerelease == 'true'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version-bump.outputs.target }}
 
       - uses: pnpm/action-setup@v3
       - uses: actions/setup-node@v4
@@ -231,6 +249,34 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # For stable releases, find the previous stable tag so "What's Changed"
+      # covers the full release (since last stable) not just since the last rc/beta.
+      - name: Find previous stable tag
+        id: prev_stable
+        if: needs.version-bump.outputs.prerelease == 'false'
+        run: |
+          git fetch --tags
+          PREV=$(git tag --sort=-version:refname | grep -v '-' | grep -v "^v${{ needs.version-bump.outputs.version }}$" | head -1)
+          echo "tag=${PREV}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog from last stable
+        id: changelog
+        if: needs.version-bump.outputs.prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY=$(gh api --method POST /repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name="v${{ needs.version-bump.outputs.version }}" \
+            -f previous_tag_name="${{ steps.prev_stable.outputs.tag }}" \
+            --jq '.body')
+          {
+            echo "body<<DELIM"
+            echo "$BODY"
+            echo "DELIM"
+          } >> $GITHUB_OUTPUT
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -238,6 +284,7 @@ jobs:
           tag_name: v${{ needs.version-bump.outputs.version }}
           name: v${{ needs.version-bump.outputs.version }}
           prerelease: ${{ needs.version-bump.outputs.prerelease == 'true' }}
+          generate_release_notes: ${{ needs.version-bump.outputs.prerelease == 'true' }}
           body: |
             ## Downloads
 
@@ -248,5 +295,5 @@ jobs:
             | 🍎 macOS | `Cash Mgr-*.dmg` | Drag to Applications |
 
             ---
-          append_body: true
-          generate_release_notes: true
+            ${{ steps.changelog.outputs.body }}
+          append_body: ${{ needs.version-bump.outputs.prerelease == 'true' }}

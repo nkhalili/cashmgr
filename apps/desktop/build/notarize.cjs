@@ -7,7 +7,6 @@ exports.default = async function notarizing(context) {
   const appPath = `${context.appOutDir}/${appName}.app`;
 
   return notarize({
-    tool: 'notarytool',
     appPath,
     appleId: process.env.APPLE_ID,
     appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,

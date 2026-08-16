@@ -1,0 +1,19 @@
+title: CashMgr
+baseurl: "/cashmgr"
+description: Personal finance app
+remote_theme: just-the-docs/just-the-docs@v0.10.0
+
+plugins:
+  - jekyll-remote-theme
+search_enabled: true
+exclude:
+  - ARCHITECTURE.md
+  - ROADMAP.md
+  - ui-patterns.md
+  - USER_GUIDE.md
+
+sass:
+  silence_deprecations:
+    - import
+    - global-builtin
+    - color-functions

@@ -11,6 +11,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
+import { useKeyboardHeight } from '../src/hooks/useKeyboardHeight';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Theme, useTheme } from '@cashmgr/ui';
@@ -22,14 +23,20 @@ import {
   CreateTransactionInputSchema,
   DEFAULT_CURRENCY,
   getTodayDateString,
+  RecurringFrequency,
+  RECURRING_FREQUENCY_LABELS,
+  RECURRING_FREQUENCIES,
+  ACCOUNT_TYPE_GROUPS,
 } from '@cashmgr/core';
 import {
   useAccountsService,
   useCategoriesService,
+  useRecurringTransactionsService,
   useTransactionsService,
 } from '../src/contexts/services-context';
 import { useFormValidation } from '../src/hooks/useFormValidation';
 import { DateInput } from '../src/components/DateInput';
+import { Switch } from '../src/components/Switch';
 
 const TRANSACTION_TYPES: { label: string; value: TransactionType }[] = [
   { label: 'Expense', value: 'expense' },
@@ -37,7 +44,7 @@ const TRANSACTION_TYPES: { label: string; value: TransactionType }[] = [
   { label: 'Transfer', value: 'transfer' },
 ];
 
-type ModalType = 'account' | 'toAccount' | 'category' | null;
+type ModalType = 'account' | 'toAccount' | 'category' | 'frequency' | null;
 
 export default function AddTransactionScreen() {
   const theme = useTheme();
@@ -46,8 +53,12 @@ export default function AddTransactionScreen() {
   const params = useLocalSearchParams<{ accountId?: string; source?: string }>();
   const accountsService = useAccountsService();
   const categoriesService = useCategoriesService();
+  const recurringTransactionsService = useRecurringTransactionsService();
   const transactionsService = useTransactionsService();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
+  const keyboardHeight = useKeyboardHeight();
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const amountInputRef = React.useRef<TextInput>(null);
 
   // Form state
   const [type, setType] = React.useState<TransactionType>('expense');
@@ -58,6 +69,11 @@ export default function AddTransactionScreen() {
   const [categoryId, setCategoryId] = React.useState('');
   const [toAccountId, setToAccountId] = React.useState('');
   const [notes, setNotes] = React.useState('');
+
+  // Recurrence state
+  const [isRecurring, setIsRecurring] = React.useState(false);
+  const [recurringFrequency, setRecurringFrequency] = React.useState<RecurringFrequency>('monthly');
+  const [recurringEndDate, setRecurringEndDate] = React.useState('');
 
   // Data state
   const [accounts, setAccounts] = React.useState<Account[]>([]);
@@ -89,6 +105,13 @@ export default function AddTransactionScreen() {
     }),
     [type, amount, date, accountId, categoryId, toAccountId, notes, accounts]
   );
+
+  // Focus amount input once data finishes loading
+  React.useEffect(() => {
+    if (!isLoading) {
+      setTimeout(() => amountInputRef.current?.focus(), 100);
+    }
+  }, [isLoading]);
 
   // Load accounts and categories when tab is focused
   useFocusEffect(
@@ -179,6 +202,18 @@ export default function AddTransactionScreen() {
     return accounts.filter((a) => a.id !== accountId);
   }, [accounts, accountId]);
 
+  // Group accounts by type (Cash / Bank Accounts / Credit Cards) for the account pickers
+  const groupAccounts = React.useCallback((list: Account[]) => {
+    return ACCOUNT_TYPE_GROUPS
+      .map((group) => ({ ...group, accounts: list.filter((a) => a.type === group.type) }))
+      .filter((group) => group.accounts.length > 0);
+  }, []);
+  const accountGroups = React.useMemo(() => groupAccounts(accounts), [accounts, groupAccounts]);
+  const destinationAccountGroups = React.useMemo(
+    () => groupAccounts(destinationAccounts),
+    [destinationAccounts, groupAccounts]
+  );
+
   // Reset destination account when source account changes
   React.useEffect(() => {
     if (toAccountId && toAccountId === accountId) {
@@ -215,6 +250,9 @@ export default function AddTransactionScreen() {
     setCategoryId('');
     setToAccountId('');
     setNotes('');
+    setIsRecurring(false);
+    setRecurringFrequency('monthly');
+    setRecurringEndDate('');
     clearErrors();
     setError(null);
     setSuccess(null);
@@ -233,13 +271,28 @@ export default function AddTransactionScreen() {
     setSuccess(null);
 
     try {
-      await transactionsService.createTransaction(formValues);
-      setSuccess('Transaction created successfully!');
-      resetForm();
+      if (isRecurring) {
+        await recurringTransactionsService.createRecurringTransaction({
+          type: formValues.type,
+          amount: formValues.amount,
+          currency: formValues.currency,
+          accountId: formValues.accountId,
+          categoryId: formValues.categoryId,
+          toAccountId: formValues.toAccountId,
+          notes: formValues.notes,
+          frequency: recurringFrequency,
+          startDate: formValues.date,
+          endDate: recurringEndDate || undefined,
+        });
+        await recurringTransactionsService.generateDueTransactions();
+        setSuccess('Recurring transaction created!');
+      } else {
+        await transactionsService.createTransaction(formValues);
+        setSuccess('Transaction created successfully!');
+      }
 
-      // Navigate to transactions tab after a short delay
       setTimeout(() => {
-        router.replace('/transactions');
+        router.replace('/');
       }, 1000);
     } catch (err) {
       const errorMessage = err instanceof AppError
@@ -249,7 +302,7 @@ export default function AddTransactionScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [getFormValues, validateAll, transactionsService, resetForm, router]);
+  }, [getFormValues, validateAll, transactionsService, recurringTransactionsService, isRecurring, recurringFrequency, recurringEndDate, resetForm, router]);
 
   // Handle type change
   const handleTypeChange = React.useCallback(
@@ -294,8 +347,8 @@ export default function AddTransactionScreen() {
           headerBackTitle: params.source === 'transactions' ? 'Back' : undefined,
         }}
       />
-      <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.content}>
+      <View style={[styles.container, keyboardHeight > 0 && { paddingBottom: keyboardHeight }]}>
+        <ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         
         {error && (
           <View style={styles.errorBanner}>
@@ -331,6 +384,7 @@ export default function AddTransactionScreen() {
               Amount <Text style={styles.required}>*</Text>
             </Text>
             <TextInput
+              ref={amountInputRef}
               style={[styles.input, errors.amount && styles.inputError]}
               placeholder="0.00"
               placeholderTextColor={theme.colors.textSecondary}
@@ -441,45 +495,80 @@ export default function AddTransactionScreen() {
               onChangeText={setNotes}
               multiline
               numberOfLines={3}
+              onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 150)}
             />
           </View>
+
+          {/* Recurrence */}
+          <View style={[styles.fieldContainer, { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing.md }]}>
+            <Switch
+              value={isRecurring}
+              onChange={setIsRecurring}
+              label="Make recurring"
+              helperText="Repeat this transaction on a schedule"
+            />
+
+            {isRecurring && (
+              <View style={{ marginTop: theme.spacing.md, gap: theme.spacing.md }}>
+                <View>
+                  <Text style={styles.label}>Frequency</Text>
+                  <TouchableOpacity
+                    style={styles.selectField}
+                    onPress={() => setActiveModal('frequency')}
+                  >
+                    <Text style={styles.selectFieldText}>
+                      {RECURRING_FREQUENCY_LABELS[recurringFrequency]}
+                    </Text>
+                    <Text style={styles.selectFieldArrow}>›</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateInput
+                  label="End date (optional)"
+                  value={recurringEndDate}
+                  onChange={setRecurringEndDate}
+                />
+              </View>
+            )}
+          </View>
+        </View>
+
+        {!isLoading && accounts.length === 0 && (
+          <View style={styles.noAccountsBanner}>
+            <Text style={styles.noAccountsText}>
+              No accounts found. Create an account first to add transactions.
+            </Text>
+          </View>
+        )}
+
+        {/* Actions */}
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.button, styles.cancelButton]}
+            onPress={resetForm}
+            disabled={isSubmitting}
+          >
+            <Text style={styles.cancelButtonText}>Reset</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.button,
+              styles.submitButton,
+              (!isValid || isSubmitting || accounts.length === 0 || flattenedCategories.length === 0) &&
+                styles.buttonDisabled,
+            ]}
+            onPress={handleSubmit}
+            disabled={!isValid || isSubmitting || accounts.length === 0 || flattenedCategories.length === 0}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.submitButtonText}>
+                {isRecurring ? 'Save recurring' : 'Save transaction'}
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
       </ScrollView>
-
-      {/* Fixed Bottom Actions */}
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.button, styles.cancelButton]}
-          onPress={resetForm}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.cancelButtonText}>Reset</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.button,
-            styles.submitButton,
-            (!isValid || isSubmitting || accounts.length === 0 || flattenedCategories.length === 0) &&
-              styles.buttonDisabled,
-          ]}
-          onPress={handleSubmit}
-          disabled={!isValid || isSubmitting || accounts.length === 0 || flattenedCategories.length === 0}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.submitButtonText}>Save transaction</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {!isLoading && accounts.length === 0 && (
-        <View style={styles.noAccountsBanner}>
-          <Text style={styles.noAccountsText}>
-            No accounts found. Create an account first to add transactions.
-          </Text>
-        </View>
-      )}
       </View>
 
       {/* Account Selection Modal */}
@@ -499,17 +588,22 @@ export default function AddTransactionScreen() {
             </Pressable>
           </View>
           <ScrollView style={styles.modalContent}>
-            {accounts.map((account) => (
-              <Pressable
-                key={account.id}
-                style={styles.modalOption}
-                onPress={() => handleSelectAccount(account.id)}
-              >
-                <Text style={styles.modalOptionText}>
-                  {account.name} ({account.currency})
-                </Text>
-                {accountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
-              </Pressable>
+            {accountGroups.map((group) => (
+              <React.Fragment key={group.type}>
+                <Text style={styles.modalSectionHeader}>{group.label}</Text>
+                {group.accounts.map((account) => (
+                  <Pressable
+                    key={account.id}
+                    style={styles.modalOption}
+                    onPress={() => handleSelectAccount(account.id)}
+                  >
+                    <Text style={styles.modalOptionText}>
+                      {account.name} ({account.currency})
+                    </Text>
+                    {accountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
+                  </Pressable>
+                ))}
+              </React.Fragment>
             ))}
           </ScrollView>
         </View>
@@ -530,17 +624,22 @@ export default function AddTransactionScreen() {
             </Pressable>
           </View>
           <ScrollView style={styles.modalContent}>
-            {destinationAccounts.map((account) => (
-              <Pressable
-                key={account.id}
-                style={styles.modalOption}
-                onPress={() => handleSelectToAccount(account.id)}
-              >
-                <Text style={styles.modalOptionText}>
-                  {account.name} ({account.currency})
-                </Text>
-                {toAccountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
-              </Pressable>
+            {destinationAccountGroups.map((group) => (
+              <React.Fragment key={group.type}>
+                <Text style={styles.modalSectionHeader}>{group.label}</Text>
+                {group.accounts.map((account) => (
+                  <Pressable
+                    key={account.id}
+                    style={styles.modalOption}
+                    onPress={() => handleSelectToAccount(account.id)}
+                  >
+                    <Text style={styles.modalOptionText}>
+                      {account.name} ({account.currency})
+                    </Text>
+                    {toAccountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
+                  </Pressable>
+                ))}
+              </React.Fragment>
             ))}
           </ScrollView>
         </View>
@@ -582,6 +681,35 @@ export default function AddTransactionScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Frequency Selection Modal */}
+      <Modal
+        visible={activeModal === 'frequency'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setActiveModal(null)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Frequency</Text>
+            <Pressable onPress={() => setActiveModal(null)}>
+              <Text style={styles.modalClose}>Done</Text>
+            </Pressable>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            {RECURRING_FREQUENCIES.map((freq) => (
+              <Pressable
+                key={freq}
+                style={styles.modalOption}
+                onPress={() => { setRecurringFrequency(freq); setActiveModal(null); }}
+              >
+                <Text style={styles.modalOptionText}>{RECURRING_FREQUENCY_LABELS[freq]}</Text>
+                {recurringFrequency === freq && <Text style={styles.modalOptionCheck}>✓</Text>}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -603,9 +731,11 @@ const createStyles = (theme: Theme) =>
       marginTop: theme.spacing.md,
       color: theme.colors.textSecondary,
     },
+    scroll: {
+      flex: 1,
+    },
     content: {
       padding: theme.spacing.lg,
-      paddingBottom: 100,
     },
     header: {
       marginBottom: theme.spacing.lg,
@@ -740,16 +870,9 @@ const createStyles = (theme: Theme) =>
       marginTop: theme.spacing.xs,
     },
     actions: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
       flexDirection: 'row',
       gap: theme.spacing.md,
-      padding: theme.spacing.lg,
-      backgroundColor: theme.colors.background,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
+      marginTop: theme.spacing.lg,
     },
     button: {
       flex: 1,
@@ -780,10 +903,7 @@ const createStyles = (theme: Theme) =>
       opacity: 0.5,
     },
     noAccountsBanner: {
-      position: 'absolute',
-      bottom: 80,
-      left: theme.spacing.lg,
-      right: theme.spacing.lg,
+      margin: theme.spacing.lg,
       backgroundColor: '#fff3cd',
       padding: theme.spacing.md,
       borderRadius: theme.radii.md,
@@ -839,6 +959,15 @@ const createStyles = (theme: Theme) =>
       fontSize: 18,
       color: theme.colors.primary,
       fontWeight: fontWeight(600),
+    },
+    modalSectionHeader: {
+      fontSize: theme.typography.caption.fontSize,
+      fontWeight: fontWeight(600),
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.md,
+      paddingBottom: theme.spacing.xs,
     },
     modalEmpty: {
       padding: theme.spacing.xl,

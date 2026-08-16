@@ -72,6 +72,58 @@ const ALL_TEST_SCHEMA_STATEMENTS = [
     value TEXT NOT NULL,
     updated_at INTEGER NOT NULL
   );`,
+  // Migration 005: Budgets table
+  `CREATE TABLE IF NOT EXISTS budgets (
+    id TEXT PRIMARY KEY,
+    category_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+    UNIQUE (category_id, month, year)
+  );`,
+  'CREATE INDEX IF NOT EXISTS idx_budgets_period ON budgets(year, month);',
+  'CREATE INDEX IF NOT EXISTS idx_budgets_category ON budgets(category_id);',
+  // Migration 006: Soft-delete for budgets
+  'ALTER TABLE budgets ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0;',
+  'CREATE INDEX IF NOT EXISTS idx_budgets_active ON budgets(is_deleted);',
+  // Migration 008: Recurring transactions table
+  `CREATE TABLE IF NOT EXISTS recurring_transactions (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL CHECK (type IN ('income','expense','transfer')),
+    amount REAL NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    account_id TEXT NOT NULL,
+    to_account_id TEXT,
+    category_id TEXT,
+    notes TEXT,
+    frequency TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT,
+    last_generated_date TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+  );`,
+  'CREATE INDEX IF NOT EXISTS idx_recurring_active ON recurring_transactions(is_active);',
+  'CREATE INDEX IF NOT EXISTS idx_recurring_account ON recurring_transactions(account_id);',
+  // Migration 009: Link transactions to recurring templates
+  'ALTER TABLE transactions ADD COLUMN recurring_transaction_id TEXT;',
+  'CREATE INDEX IF NOT EXISTS idx_transactions_recurring ON transactions(recurring_transaction_id);',
+  // Migration 010: Credit account statement/payment cycle and auto-payment
+  'ALTER TABLE accounts ADD COLUMN statement_day INTEGER;',
+  'ALTER TABLE accounts ADD COLUMN payment_day INTEGER;',
+  'ALTER TABLE accounts ADD COLUMN payment_account_id TEXT;',
+  'ALTER TABLE accounts ADD COLUMN auto_payment_enabled INTEGER NOT NULL DEFAULT 0;',
+  'ALTER TABLE accounts ADD COLUMN auto_payment_mode TEXT;',
+  'ALTER TABLE accounts ADD COLUMN auto_payment_fixed_amount REAL;',
+  'ALTER TABLE accounts ADD COLUMN last_auto_payment_date TEXT;',
+  'CREATE INDEX IF NOT EXISTS idx_accounts_auto_payment ON accounts(auto_payment_enabled);',
 ];
 
 /**

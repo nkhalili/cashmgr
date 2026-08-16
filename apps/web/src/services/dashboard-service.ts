@@ -17,6 +17,7 @@ import {
   convertToPrimary,
   getPrimaryCurrency,
   formatCurrencyWithSymbol,
+  buildCategoryAggregationTree,
 } from '@cashmgr/core';
 
 /**
@@ -37,7 +38,9 @@ export class DashboardService {
   constructor(private readonly adapter: DatabaseAdapter) {}
 
   /**
-   * Get transactions aggregated by category with percentages
+   * Get transactions aggregated by category with percentages.
+   * Sub-category totals are rolled up into their parent category, and sub-category
+   * percentages are relative to their parent's total (see CategoryAggregation.subcategories).
    */
   async getCategoryBreakdown(filter: DashboardFilter): Promise<CategoryAggregation[]> {
     try {
@@ -47,16 +50,12 @@ export class DashboardService {
         dateRange,
       };
 
-      const aggregations = await this.adapter.getTransactionAggregateByCategory(filterParams);
+      const [aggregations, categories] = await Promise.all([
+        this.adapter.getTransactionAggregateByCategory(filterParams),
+        this.adapter.getCategories(),
+      ]);
 
-      // Calculate total for percentage computation
-      const total = aggregations.reduce((sum, agg) => sum + agg.total, 0);
-
-      // Add percentage to each aggregation
-      return aggregations.map((agg) => ({
-        ...agg,
-        percentage: total > 0 ? Math.round((agg.total / total) * 1000) / 10 : 0,
-      }));
+      return buildCategoryAggregationTree(aggregations, categories);
     } catch (error) {
       throw ErrorHandler.handle(error, 'DashboardService.getCategoryBreakdown');
     }

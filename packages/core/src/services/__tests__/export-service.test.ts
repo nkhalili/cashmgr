@@ -10,8 +10,8 @@ describe('exportData', () => {
     adapter = new MockCoreAdapter();
     adapter.seed({
       accounts: [
-        { id: 'acc-1', name: 'Cash', type: 'cash', balance: 150, initialBalance: 100, currency: 'USD', createdAt: 1000, updatedAt: 2000 },
-        { id: 'acc-2', name: 'Bank', type: 'bank', balance: 500, initialBalance: 500, currency: 'USD', createdAt: 1001, updatedAt: 2001 },
+        { id: 'acc-1', name: 'Cash', type: 'cash', balance: 150, initialBalance: 100, currency: 'USD', autoPaymentEnabled: false, createdAt: 1000, updatedAt: 2000 },
+        { id: 'acc-2', name: 'Bank', type: 'bank', balance: 500, initialBalance: 500, currency: 'USD', autoPaymentEnabled: false, createdAt: 1001, updatedAt: 2001 },
       ],
       categories: [
         { id: 'cat-1', name: 'Groceries', type: 'expense', isActive: true, createdAt: 1000, updatedAt: 1000 },
@@ -24,7 +24,7 @@ describe('exportData', () => {
         { id: 'tx-1', type: 'income', amount: 50, currency: 'USD', date: '2026-01-15', accountId: 'acc-1', categoryId: 'cat-2', createdAt: 1000, updatedAt: 1000 },
         { id: 'tx-2', type: 'expense', amount: 30, currency: 'USD', date: '2026-01-16', accountId: 'acc-1', categoryId: 'cat-1', notes: 'Weekly shop', createdAt: 1001, updatedAt: 1001 },
       ],
-      settings: { primary_currency: 'USD' },
+      settings: {},
     });
   });
 
@@ -72,7 +72,7 @@ describe('exportData', () => {
     it('exports settings', async () => {
       const result = await exportData(adapter, { format: 'json' });
       const backup = JSON.parse(result.content) as ExportBackup;
-      expect(backup.data.settings).toEqual({ primary_currency: 'USD' });
+      expect(backup.data.settings).toEqual({});
     });
 
     it('exports only selected entities', async () => {

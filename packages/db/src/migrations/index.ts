@@ -207,6 +207,150 @@ const MIGRATION_004: Migration = {
 };
 
 /**
+ * Migration 005: Budgets Table
+ * F-063: Monthly per-category expense budgets
+ */
+const MIGRATION_005: Migration = {
+  version: 5,
+  description: 'Add budgets table for monthly category budgets',
+  up: [
+    `CREATE TABLE IF NOT EXISTS budgets (
+      id TEXT PRIMARY KEY,
+      category_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      month INTEGER NOT NULL,
+      year INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE,
+      UNIQUE (category_id, month, year)
+    );`,
+    'CREATE INDEX IF NOT EXISTS idx_budgets_period ON budgets(year, month);',
+    'CREATE INDEX IF NOT EXISTS idx_budgets_category ON budgets(category_id);',
+  ],
+  down: [
+    'DROP INDEX IF EXISTS idx_budgets_category;',
+    'DROP INDEX IF EXISTS idx_budgets_period;',
+    'DROP TABLE IF EXISTS budgets;',
+  ],
+};
+
+/**
+ * Migration 006: Soft-delete for budgets
+ * Adds is_deleted flag so deletions act as stop signals for auto-carry-forward.
+ */
+const MIGRATION_006: Migration = {
+  version: 6,
+  description: 'Add is_deleted column to budgets for soft-delete support',
+  up: [
+    'ALTER TABLE budgets ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0;',
+    'CREATE INDEX IF NOT EXISTS idx_budgets_active ON budgets(is_deleted);',
+  ],
+  down: [
+    'DROP INDEX IF EXISTS idx_budgets_active;',
+    // SQLite does not support DROP COLUMN before version 3.35 — rebuild the table
+    `CREATE TABLE IF NOT EXISTS budgets_old AS SELECT id, category_id, amount, month, year, created_at, updated_at FROM budgets WHERE is_deleted = 0;`,
+    'DROP TABLE budgets;',
+    'ALTER TABLE budgets_old RENAME TO budgets;',
+  ],
+};
+
+/**
+ * Migration 007: Remove redundant primary_currency setting
+ * currencies.is_primary is the source of truth; the settings key was never read back.
+ */
+const MIGRATION_007: Migration = {
+  version: 7,
+  description: 'Remove redundant primary_currency from settings table',
+  up: [
+    `DELETE FROM settings WHERE key = 'primary_currency';`,
+  ],
+  down: [
+    `INSERT OR IGNORE INTO settings (key, value, updated_at)
+     SELECT id, id, strftime('%s','now') * 1000 FROM currencies WHERE is_primary = 1 LIMIT 1;`,
+  ],
+};
+
+/**
+ * Migration 008: Recurring Transactions Table
+ * Adds recurring_transactions table for scheduling repeating transactions.
+ */
+const MIGRATION_008: Migration = {
+  version: 8,
+  description: 'Add recurring_transactions table',
+  up: [
+    `CREATE TABLE IF NOT EXISTS recurring_transactions (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL CHECK (type IN ('income','expense','transfer')),
+      amount REAL NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      account_id TEXT NOT NULL,
+      to_account_id TEXT,
+      category_id TEXT,
+      notes TEXT,
+      frequency TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT,
+      last_generated_date TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+      FOREIGN KEY (to_account_id) REFERENCES accounts(id) ON DELETE SET NULL,
+      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+    );`,
+    'CREATE INDEX IF NOT EXISTS idx_recurring_active ON recurring_transactions(is_active);',
+    'CREATE INDEX IF NOT EXISTS idx_recurring_account ON recurring_transactions(account_id);',
+  ],
+  down: [
+    'DROP INDEX IF EXISTS idx_recurring_account;',
+    'DROP INDEX IF EXISTS idx_recurring_active;',
+    'DROP TABLE IF EXISTS recurring_transactions;',
+  ],
+};
+
+/**
+ * Migration 009: Add recurring_transaction_id to transactions
+ * Links generated transactions back to their recurring template.
+ */
+const MIGRATION_009: Migration = {
+  version: 9,
+  description: 'Add recurring_transaction_id column to transactions',
+  up: [
+    'ALTER TABLE transactions ADD COLUMN recurring_transaction_id TEXT;',
+    'CREATE INDEX IF NOT EXISTS idx_transactions_recurring ON transactions(recurring_transaction_id);',
+  ],
+  down: [
+    'DROP INDEX IF EXISTS idx_transactions_recurring;',
+    // SQLite < 3.35 does not support DROP COLUMN; rebuild if needed
+  ],
+};
+
+/**
+ * Migration 010: Credit account statement/payment cycle and auto-payment
+ * Adds statement/payment day-of-month, linked payment account, and
+ * auto-payment configuration to accounts (credit accounts only).
+ */
+const MIGRATION_010: Migration = {
+  version: 10,
+  description: 'Add credit account statement/payment cycle and auto-payment columns',
+  up: [
+    'ALTER TABLE accounts ADD COLUMN statement_day INTEGER;',
+    'ALTER TABLE accounts ADD COLUMN payment_day INTEGER;',
+    'ALTER TABLE accounts ADD COLUMN payment_account_id TEXT;',
+    'ALTER TABLE accounts ADD COLUMN auto_payment_enabled INTEGER NOT NULL DEFAULT 0;',
+    'ALTER TABLE accounts ADD COLUMN auto_payment_mode TEXT;',
+    'ALTER TABLE accounts ADD COLUMN auto_payment_fixed_amount REAL;',
+    'ALTER TABLE accounts ADD COLUMN last_auto_payment_date TEXT;',
+    'CREATE INDEX IF NOT EXISTS idx_accounts_auto_payment ON accounts(auto_payment_enabled);',
+  ],
+  down: [
+    'DROP INDEX IF EXISTS idx_accounts_auto_payment;',
+    // SQLite < 3.35 does not support DROP COLUMN; rebuild if needed
+  ],
+};
+
+/**
  * All migrations in order
  * IMPORTANT: Never modify existing migrations!
  * Always add new migrations with incremented version numbers.
@@ -216,6 +360,12 @@ export const migrations: Migration[] = [
   MIGRATION_002,
   MIGRATION_003,
   MIGRATION_004,
+  MIGRATION_005,
+  MIGRATION_006,
+  MIGRATION_007,
+  MIGRATION_008,
+  MIGRATION_009,
+  MIGRATION_010,
   // Future migrations go here
 ];
 

@@ -4,18 +4,29 @@ import { Button, useTheme } from '@cashmgr/ui';
 import { Dashboard } from './pages/Dashboard';
 import { Transactions } from './pages/Transactions';
 import { AddTransaction } from './pages/AddTransaction';
+import { Budgets } from './pages/Budgets';
 import { Categories } from './pages/Categories';
 import { Accounts } from './pages/Accounts';
 import { Settings } from './pages/Settings';
+import { SettingsCurrencies } from './pages/SettingsCurrencies';
+import { SettingsAppearance } from './pages/SettingsAppearance';
+import { SettingsBackup } from './pages/SettingsBackup';
+import { SettingsCsv } from './pages/SettingsCsv';
+import { SettingsLogs } from './pages/SettingsLogs';
+import { SettingsDevelopment } from './pages/SettingsDevelopment';
+import { SettingsAbout } from './pages/SettingsAbout';
+import { SettingsRecurringTransactions } from './pages/SettingsRecurringTransactions';
+import { SettingsRecurringEdit } from './pages/SettingsRecurringEdit';
 import { useThemePreference, ThemePreference } from './contexts/theme-context';
+import { UpdateBanner } from './components/UpdateBanner';
 import './App.css';
 
 const NAV_LINKS = [
-  { label: 'Dashboard', to: '/' },
-  { label: 'Transactions', to: '/transactions' },
-  { label: 'Accounts', to: '/accounts' },
-  { label: 'Categories', to: '/categories' },
-  { label: 'Settings', to: '/settings' },
+  { label: 'Dashboard', to: '/', end: true },
+  { label: 'Transactions', to: '/transactions', end: false },
+  { label: 'Accounts', to: '/accounts', end: false },
+  { label: 'Categories', to: '/categories', end: false },
+  { label: 'Settings', to: '/settings', end: false },
 ];
 
 const PREFERENCE_CYCLE: ThemePreference[] = ['system', 'light', 'dark'];
@@ -45,6 +56,7 @@ export const App: React.FC = () => {
           fontFamily: theme.fontFamily,
         }}
       >
+        <UpdateBanner />
         <aside
           className="nav"
           style={{
@@ -72,7 +84,7 @@ export const App: React.FC = () => {
               Cash mgr.
             </h1>
             <p style={{ margin: 0, color: 'rgba(255,255,255,0.8)' }}>
-              Calm oversight for your accounts.
+              Manager your money. Own your data.
             </p>
           </div>
           <nav style={{ flex: 1 }}>
@@ -81,6 +93,7 @@ export const App: React.FC = () => {
                 <li key={link.to}>
                   <NavLink
                     to={link.to}
+                    end={link.end}
                     style={({ isActive }) => ({
                       display: 'block',
                       padding: `${theme.spacing.sm}px ${theme.spacing.md}px`,
@@ -98,7 +111,7 @@ export const App: React.FC = () => {
               ))}
             </ul>
           </nav>
-          <div style={{ marginTop: theme.spacing.lg }}>
+          <div className="theme-btn-float" style={{ marginTop: theme.spacing.lg }}>
             <Button
               variant="ghost"
               onClick={handleCycleTheme}
@@ -110,6 +123,9 @@ export const App: React.FC = () => {
             >
               Theme: {PREFERENCE_LABELS[preference]}
             </Button>
+            <p style={{ margin: `${theme.spacing.xs}px 0 0`, fontSize: 13, color: 'rgba(255,255,255,0.45)', textAlign: 'center' }}>
+              v{__APP_VERSION__}
+            </p>
           </div>
         </aside>
         <main
@@ -124,8 +140,18 @@ export const App: React.FC = () => {
             <Route path="/transactions/add" element={<AddTransaction />} />
             <Route path="/transactions/:id/edit" element={<AddTransaction />} />
             <Route path="/accounts" element={<Accounts />} />
+            <Route path="/settings/budgets" element={<Budgets />} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/currencies" element={<SettingsCurrencies />} />
+            <Route path="/settings/appearance" element={<SettingsAppearance />} />
+            <Route path="/settings/backup" element={<SettingsBackup />} />
+            <Route path="/settings/csv" element={<SettingsCsv />} />
+            <Route path="/settings/logs" element={<SettingsLogs />} />
+            <Route path="/settings/recurring" element={<SettingsRecurringTransactions />} />
+            <Route path="/settings/recurring/:id/edit" element={<SettingsRecurringEdit />} />
+            <Route path="/settings/development" element={<SettingsDevelopment />} />
+            <Route path="/settings/about" element={<SettingsAbout />} />
           </Routes>
         </main>
       </div>

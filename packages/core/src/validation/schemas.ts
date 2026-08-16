@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { ValidationError } from './errors';
 
 /**
  * Account Type Schema
@@ -23,6 +24,35 @@ export const CurrencyCodeSchema = z
   .default('USD');
 
 /**
+ * Date String Schema
+ * B-001: Validates date strings in YYYY-MM-DD format (timezone-agnostic)
+ */
+export const DateStringSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+  .refine(
+    (val) => {
+      // Verify it's a valid date
+      const [year, month, day] = val.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      return (
+        date.getFullYear() === year &&
+        date.getMonth() === month - 1 &&
+        date.getDate() === day
+      );
+    },
+    'Date must be a valid calendar date'
+  );
+
+/**
+ * Auto Payment Mode Schema
+ * 'full' pays the full Balance Payable each cycle; 'fixed' pays a fixed amount (capped at Balance Payable).
+ */
+export const AutoPaymentModeSchema = z.enum(['full', 'fixed'], {
+  message: 'Auto payment mode must be full or fixed',
+});
+
+/**
  * Create Account Input Schema
  *
  * Validates input for creating a new account
@@ -40,6 +70,12 @@ export const CreateAccountInputSchema = z
       .optional()
       .default(0),
     currency: CurrencyCodeSchema.optional(),
+    statementDay: z.number().int().min(1).max(31).optional(),
+    paymentDay: z.number().int().min(1).max(31).optional(),
+    paymentAccountId: z.string().optional(),
+    autoPaymentEnabled: z.boolean().optional(),
+    autoPaymentMode: AutoPaymentModeSchema.optional(),
+    autoPaymentFixedAmount: z.number().positive().optional(),
   })
   .strict(); // Don't allow extra properties
 
@@ -62,6 +98,13 @@ export const UpdateAccountInputSchema = z
     balance: z.number().optional(),
     initialBalance: z.number().optional(),
     currency: CurrencyCodeSchema.optional(),
+    statementDay: z.number().int().min(1).max(31).nullable().optional(),
+    paymentDay: z.number().int().min(1).max(31).nullable().optional(),
+    paymentAccountId: z.string().nullable().optional(),
+    autoPaymentEnabled: z.boolean().optional(),
+    autoPaymentMode: AutoPaymentModeSchema.nullable().optional(),
+    autoPaymentFixedAmount: z.number().positive().nullable().optional(),
+    lastAutoPaymentDate: DateStringSchema.nullable().optional(),
   })
   .strict()
   .refine((data) => {
@@ -77,8 +120,15 @@ export const UpdateAccountInputSchema = z
  * Should be called in services after schema validation
  */
 export function validateAccountBusinessRules(input: {
+  id?: string;
   type?: string;
   initialBalance?: number;
+  statementDay?: number | null;
+  paymentDay?: number | null;
+  paymentAccountId?: string | null;
+  autoPaymentEnabled?: boolean;
+  autoPaymentMode?: string | null;
+  autoPaymentFixedAmount?: number | null;
 }): void {
   // Only credit accounts can have negative initial balance
   if (
@@ -86,7 +136,31 @@ export function validateAccountBusinessRules(input: {
     input.initialBalance < 0 &&
     input.type !== 'credit'
   ) {
-    throw new Error('Only credit accounts can have a negative initial balance');
+    throw new ValidationError('initialBalance', 'Only credit accounts can have a negative initial balance');
+  }
+
+  const hasCreditFields =
+    input.statementDay != null ||
+    input.paymentDay != null ||
+    input.paymentAccountId != null ||
+    input.autoPaymentEnabled === true;
+
+  if (hasCreditFields && input.type !== 'credit') {
+    throw new ValidationError('type', 'Statement date, payment date, and auto payment are only available for credit accounts');
+  }
+
+  if (input.paymentAccountId != null && input.id != null && input.paymentAccountId === input.id) {
+    throw new ValidationError('paymentAccountId', 'Payment account cannot be the credit account itself');
+  }
+
+  if (input.autoPaymentEnabled) {
+    if (input.statementDay == null || input.paymentDay == null || input.paymentAccountId == null) {
+      throw new ValidationError('autoPaymentEnabled', 'Auto payment requires a statement date, payment date, and payment account');
+    }
+  }
+
+  if (input.autoPaymentMode === 'fixed' && (input.autoPaymentFixedAmount == null || input.autoPaymentFixedAmount <= 0)) {
+    throw new ValidationError('autoPaymentFixedAmount', 'A fixed payment amount greater than 0 is required');
   }
 }
 
@@ -279,27 +353,6 @@ export const TransactionNotesSchema = z
   .optional();
 
 /**
- * Date String Schema
- * B-001: Validates date strings in YYYY-MM-DD format (timezone-agnostic)
- */
-export const DateStringSchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
-  .refine(
-    (val) => {
-      // Verify it's a valid date
-      const [year, month, day] = val.split('-').map(Number);
-      const date = new Date(year, month - 1, day);
-      return (
-        date.getFullYear() === year &&
-        date.getMonth() === month - 1 &&
-        date.getDate() === day
-      );
-    },
-    'Date must be a valid calendar date'
-  );
-
-/**
  * Create Transaction Input Schema
  * F-002: Validates input for creating a new transaction
  */
@@ -313,6 +366,7 @@ export const CreateTransactionInputSchema = z
     categoryId: z.string().optional(), // Optional for transfers
     toAccountId: z.string().optional(),
     notes: TransactionNotesSchema,
+    recurringTransactionId: z.string().optional(), // Internal: set by recurring generation
   })
   .strict()
   .refine(
@@ -386,6 +440,30 @@ export function validateTransactionBusinessRules(input: {
 }
 
 /**
+ * Budget Schemas
+ * F-063: Monthly budget per category
+ */
+export const CreateBudgetInputSchema = z
+  .object({
+    categoryId: z.string().min(1, 'Category is required'),
+    amount: z.number().positive('Budget amount must be positive'),
+    month: z.number().int().min(1).max(12),
+    year: z.number().int().min(2000).max(2100),
+  })
+  .strict();
+
+export const UpdateBudgetInputSchema = z
+  .object({
+    id: z.string().min(1, 'Budget ID is required'),
+    amount: z.number().positive('Budget amount must be positive').optional(),
+  })
+  .strict()
+  .refine((data) => {
+    const { id, ...rest } = data;
+    return Object.keys(rest).length > 0;
+  }, 'At least one field must be provided for update');
+
+/**
  * Transaction Filter Schema
  * F-002: Validates transaction filter parameters
  */
@@ -406,3 +484,76 @@ export const PaginationSchema = z.object({
   offset: z.number().int().min(0).default(0),
   limit: z.number().int().min(1).max(100).default(20),
 });
+
+/**
+ * Recurring Transaction Schemas
+ */
+export const RecurringFrequencySchema = z.enum([
+  'daily',
+  'weekdays',
+  'weekends',
+  'weekly',
+  'biweekly',
+  'every4weeks',
+  'monthly',
+  'last_day_of_month',
+  'every6months',
+  'annually',
+], { message: 'Invalid recurrence frequency' });
+
+export const CreateRecurringTransactionInputSchema = z
+  .object({
+    type: TransactionTypeSchema,
+    amount: z.number().positive('Amount must be positive'),
+    currency: CurrencyCodeSchema,
+    accountId: z.string().min(1, 'Account is required'),
+    categoryId: z.string().optional(),
+    toAccountId: z.string().optional(),
+    notes: TransactionNotesSchema,
+    frequency: RecurringFrequencySchema,
+    startDate: DateStringSchema,
+    endDate: DateStringSchema.optional(),
+  })
+  .strict()
+  .refine(
+    (data) => {
+      if (data.type === 'transfer' && !data.toAccountId) return false;
+      return true;
+    },
+    { message: 'Transfer requires a destination account' }
+  )
+  .refine(
+    (data) => {
+      if (data.type !== 'transfer' && !data.categoryId) return false;
+      return true;
+    },
+    { message: 'Category is required for income and expense' }
+  )
+  .refine(
+    (data) => {
+      if (data.endDate && data.endDate <= data.startDate) return false;
+      return true;
+    },
+    { message: 'End date must be after start date' }
+  );
+
+export const UpdateRecurringTransactionInputSchema = z
+  .object({
+    id: z.string().min(1, 'ID is required'),
+    type: TransactionTypeSchema.optional(),
+    amount: z.number().positive('Amount must be positive').optional(),
+    currency: CurrencyCodeSchema.optional(),
+    accountId: z.string().min(1).optional(),
+    categoryId: z.string().nullable().optional(),
+    toAccountId: z.string().nullable().optional(),
+    notes: TransactionNotesSchema.nullable(),
+    frequency: RecurringFrequencySchema.optional(),
+    startDate: DateStringSchema.optional(),
+    endDate: DateStringSchema.nullable().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict()
+  .refine((data) => {
+    const { id, ...rest } = data;
+    return Object.keys(rest).length > 0;
+  }, 'At least one field must be provided for update');

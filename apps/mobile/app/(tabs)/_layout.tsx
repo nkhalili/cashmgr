@@ -31,18 +31,18 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Transactions',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+            <Ionicons name="swap-horizontal-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="transactions"
+        name="dashboard"
         options={{
-          title: 'Transactions',
+          title: 'Dashboard',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="swap-horizontal-outline" size={size} color={color} />
+            <Ionicons name="pie-chart-outline" size={size} color={color} />
           ),
         }}
       />
@@ -64,7 +64,7 @@ export default function TabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen
+<Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',

@@ -44,10 +44,21 @@ All dates are stored as `YYYY-MM-DD` strings (not timestamps) to avoid timezone 
 | initialBalance | number | NO | 0 | |
 | balance | number | NO | 0 | Auto-updated by service layer |
 | currency | string | NO | USD | 3-letter ISO 4217 code |
+| statementDay | number | YES | NULL | 1–31, day of month the statement closes. Credit accounts only |
+| paymentDay | number | YES | NULL | 1–31, day of month payment is due. Credit accounts only |
+| paymentAccountId | string | YES | NULL | FK → accounts, account auto-payments are drawn from |
+| autoPaymentEnabled | boolean | NO | false | Whether auto-pay is turned on for this credit account |
+| autoPaymentMode | string | YES | NULL | `full` \| `fixed` — see "Credit Account Statement Cycle" below |
+| autoPaymentFixedAmount | number | YES | NULL | Used when `autoPaymentMode = 'fixed'` |
+| lastAutoPaymentDate | string | YES | NULL | YYYY-MM-DD, last payment due date auto-pay has processed. Internal bookkeeping, not user-editable |
 | createdAt | number | NO | — | Unix timestamp ms |
 | updatedAt | number | NO | — | Unix timestamp ms |
 
-Indexes: `idx_accounts_type` on `type`
+Indexes: `idx_accounts_type` on `type`, `idx_accounts_auto_payment` on `autoPaymentEnabled`
+
+Statement/payment fields, `paymentAccountId`, and auto-pay fields are only meaningful when `type = 'credit'`; `validateAccountBusinessRules` (`packages/core/src/validation/schemas.ts`) rejects them on non-credit accounts and clears them server-side (`AccountsService.updateAccount`, duplicated per app) when an account's type changes away from `credit`.
+
+`AccountsService.deleteAccount` (duplicated per app) blocks deletion with a `ValidationError` if any other account references the target as `paymentAccountId` — otherwise deleting a payment account would leave a credit account's auto-pay pointing at a nonexistent account.
 
 ### `transactions`
 
@@ -66,7 +77,9 @@ Indexes: `idx_accounts_type` on `type`
 | createdAt | number | NO | — | Unix timestamp ms |
 | updatedAt | number | NO | — | Unix timestamp ms |
 
-Indexes: `idx_transactions_account_id`, `idx_transactions_date`, `idx_transactions_type`
+| recurringTransactionId | string | YES | NULL | FK → recurring_transactions (nullable) |
+
+Indexes: `idx_transactions_account_id`, `idx_transactions_date`, `idx_transactions_type`, `idx_transactions_recurring`
 
 ### `categories`
 
@@ -95,6 +108,46 @@ Indexes: `idx_transactions_account_id`, `idx_transactions_date`, `idx_transactio
 | isActive | boolean | NO | true | |
 | createdAt | number | NO | — | Unix timestamp ms |
 | updatedAt | number | NO | — | Unix timestamp ms |
+
+### `budgets`
+
+| Field | Type | Nullable | Default | Notes |
+| --- | --- | --- | --- | --- |
+| id | string | NO | uuid | Primary key |
+| categoryId | string | NO | — | FK → categories (ON DELETE CASCADE) |
+| amount | number | NO | — | Positive number — the spending limit |
+| month | integer | NO | — | 1–12 |
+| year | integer | NO | — | Four-digit year |
+| isDeleted | boolean | NO | 0 | Soft-delete flag — see Budget Lifecycle below |
+| createdAt | number | NO | — | Unix timestamp ms |
+| updatedAt | number | NO | — | Unix timestamp ms |
+
+Unique constraint: `(category_id, month, year)` — one budget per category per month.
+Indexes: `idx_budgets_period` on `(year, month)`, `idx_budgets_category` on `category_id`, `idx_budgets_active` on `(is_deleted)`
+
+### `recurring_transactions`
+
+| Field | Type | Nullable | Default | Notes |
+| --- | --- | --- | --- | --- |
+| id | string | NO | uuid | Primary key |
+| type | string | NO | — | `income` \| `expense` \| `transfer` |
+| amount | number | NO | — | Positive number |
+| currency | string | NO | USD | ISO 4217 |
+| accountId | string | NO | — | FK → accounts (ON DELETE CASCADE) |
+| toAccountId | string | YES | NULL | FK → accounts (transfer only) |
+| categoryId | string | YES | NULL | FK → categories |
+| notes | string | YES | NULL | |
+| frequency | string | NO | — | See `RecurringFrequency` |
+| startDate | string | NO | — | YYYY-MM-DD — anchor date for schedule |
+| endDate | string | YES | NULL | YYYY-MM-DD — stop generating after this date |
+| lastGeneratedDate | string | YES | NULL | YYYY-MM-DD — last date a transaction was created |
+| isActive | boolean | NO | true | Deactivated on delete |
+| createdAt | number | NO | — | Unix timestamp ms |
+| updatedAt | number | NO | — | Unix timestamp ms |
+
+`frequency` values: `daily`, `weekdays`, `weekends`, `weekly`, `biweekly`, `every4weeks`, `monthly`, `last_day_of_month`, `every6months`, `annually`
+
+Indexes: `idx_recurring_active` on `is_active`, `idx_recurring_account` on `account_id`
 
 ### `settings`
 
@@ -137,6 +190,7 @@ apps/web/src/services/
   categories-service.ts
   currencies-service.ts
   dashboard-service.ts
+  recurring-transactions-service.ts
 
 apps/mobile/src/services/
   (same structure)
@@ -149,6 +203,95 @@ apps/mobile/src/services/
 - Transfer: `-amount` from `accountId`, `+amount` to `toAccountId`
 - On edit: reverse old effect, apply new effect
 - On delete: reverse transaction's effect
+
+### Recurring Transactions
+
+Recurring transactions automate periodic expense/income generation. The feature has three layers:
+
+**Template (`recurring_transactions` table)**
+Stores the schedule: frequency, startDate, endDate, lastGeneratedDate. A template is never edited in-place for past dates — only future-dated generated transactions are affected.
+
+**Generation (`RecurringTransactionsService.generateDueTransactions`)**
+Called at app startup. For each active template, `getDueOccurrences(frequency, startDate, lastGeneratedDate, endDate, today)` computes all dates between `lastGeneratedDate + 1 day` and today, then `transactionsService.createTransaction` is called for each date. The template's `lastGeneratedDate` is advanced to the last generated date.
+
+Edit/Delete semantics:
+
+- Edit: deletes all generated transactions dated ≥ today and resets `lastGeneratedDate` to yesterday, so they regenerate with the updated template values on next startup.
+- Delete: deactivates the template (`isActive = false`) and deletes all generated transactions dated ≥ today.
+
+**`getDueOccurrences` utility** (`packages/core/src/utils/recurring-dates.ts`)
+Pure function with no side effects. Used by the service and fully tested independently. Weekly/biweekly/every4weeks anchor from `startDate` to avoid interval drift. Monthly/every6months/annually anchor from `startDate` to preserve the original calendar day (e.g. Jan 31 → Mar 31, not Mar 28 via Feb 28).
+
+**Enabling recurring from Edit Transaction**
+The Add Transaction screen has always supported creating a transaction as recurring. Edit Transaction (both apps) now supports two additional cases, both driven by whether `transaction.recurringTransactionId` is set:
+
+- *Not yet recurring*: the same "Make recurring" toggle + frequency/end-date fields as Add Transaction. Saving calls `RecurringTransactionsService.createRecurringTransactionFromExisting(input, anchorDate)`, which creates the template with `startDate = anchorDate` (the transaction's own date) and immediately backfills `lastGeneratedDate = anchorDate` before the caller runs `generateDueTransactions()`. This makes the edited transaction the series' de facto first occurrence without retroactively linking it (`recurringTransactionId` on that transaction is left unset — `UpdateTransactionInput` doesn't support setting it), while still backfilling any gap occurrences between the anchor date and today.
+- *Already recurring*: frequency/end date are pre-filled from the linked template (fetched via `getRecurringTransactionById`) and shown without the toggle. Saving a change calls the existing `updateRecurringTransaction`, so the edit/regenerate semantics above apply unchanged.
+
+### Credit Account Statement Cycle & Auto-Pay
+
+Credit accounts (`type = 'credit'`) can optionally track a billing cycle — a statement day and payment day (both day-of-month, 1–31) — and auto-pay themselves from a linked account.
+
+**Balance Payable vs. Outstanding Balance** (`calculateCreditAccountSummary`, `packages/core/src/services/credit-account-utils.ts`)
+
+- **Outstanding Balance** = `max(0, -account.balance)` — the total currently owed (billed + unbilled), read directly from the live, incrementally-maintained `balance` column.
+- **Balance Payable** = the debt as of the last closed statement date, minus any payments (transfers into the account) made since. Computed by replaying `initialBalance` plus every transaction touching the account up to `lastStatementDate` (reusing `getAccountBalanceDelta` from `balance-utils.ts`, the same per-transaction math `recalculateBalances` uses), then subtracting later payments. `null` when `statementDay` isn't configured.
+- `getMostRecentDayOfMonthOnOrBefore` / `getNextDayOfMonthAfter` (same file) do the day-of-month arithmetic, clamping short months (e.g. day 31 in February → the 28th/29th).
+
+Both apps compose this with a live account/transaction fetch via `getCreditAccountSummaries` (`apps/{web,mobile}/src/services/credit-account-summary.ts`), used by the Accounts page to render the two figures per credit account (gated by the "show balance payable / outstanding balance" setting — see `credit-display-context.tsx` in each app, persisted the same way as theme preference).
+
+**Auto-Pay (`CreditAutoPaymentService.processDuePayments`, duplicated per app like `RecurringTransactionsService`)**
+There is no background scheduler in this app — auto-pay follows the exact same "catch-up on app open" pattern as recurring transactions: called once during `ServicesProvider` init, right after `recurringTransactionsService.generateDueTransactions()`. For each credit account with `autoPaymentEnabled` and all of `statementDay`/`paymentDay`/`paymentAccountId` set:
+
+1. Compute the most recent payment due date on or before today. Skip if `lastAutoPaymentDate` already covers it (bookkeeping field, mirrors `RecurringTransaction.lastGeneratedDate`).
+2. Compute Balance Payable as of that due date's preceding statement.
+3. Pay the full amount, or a fixed amount capped at what's owed, depending on `autoPaymentMode`.
+4. Create the payment via the existing `TransactionsService.createTransaction({ type: 'transfer', accountId: paymentAccountId, toAccountId: creditAccountId, notes: 'Payment', ... })` — reuses the existing transfer + balance-update logic untouched. (`Transaction` has no `description` column — see the `transactions` table above — so `notes` is the field used.)
+5. Stamp `lastAutoPaymentDate` to prevent reprocessing, even when nothing was owed.
+
+Errors are non-fatal (logged via `ErrorHandler`, loop continues), matching `generateDueTransactions`'s error handling.
+
+### Export / Import Service
+
+`packages/core/src/services/export-service.ts` and `import-service.ts` implement backup/restore. Both are platform-agnostic and receive a `DatabaseAdapter` — no platform code needed.
+
+#### Backup format (`ExportBackup`, schema version 5)
+
+```typescript
+{
+  metadata: {
+    appName: 'CashMgr',
+    version: string,        // app semver
+    schemaVersion: 5,       // bumped when shape changes
+    exportDate: string,     // ISO 8601
+    platform: string,
+  },
+  data: {
+    accounts:       Account[],
+    categories:     Category[],
+    currencies:     Currency[],
+    transactions:   Transaction[],
+    budgets:        Budget[],         // active rows only
+    deletedBudgets: Budget[],         // effective tombstones only
+    settings:       Record<string, string>,
+  },
+}
+```
+
+`deletedBudgets` contains at most one row per category — the most-recent deleted row where it is also the most-recent row for that category (see [Budget Lifecycle](#budget-lifecycle-soft-delete-and-carry-forward)). This keeps backup size bounded by category count, not month count.
+
+#### Import modes
+
+| Mode | Behaviour |
+| --- | --- |
+| **replace** | Clears all existing data, imports backup, recalculates account balances from transactions |
+| **merge** | Keeps existing data; overwrites only if the backup's `updatedAt` is newer; skips duplicate transactions |
+
+#### `DatabaseAdapter` methods used
+
+- `getAllBudgets()` — returns all active budget rows across all periods
+- `getEffectiveTombstones()` — returns the effective tombstone set (at most one per category)
+- `bulkUpsert(data: BulkUpsertData)` — atomic batch write used by both modes
 
 ### Validation
 
@@ -165,11 +308,73 @@ AppError
   └── NotFoundError     ← Entity not found
 ```
 
-Use `ErrorHandler.handle()` for consistent logging. React `ErrorBoundary` is used at the UI level.
+Use `ErrorHandler.handle()` for consistent logging. React `ErrorBoundary` is used at the UI level (`packages/ui/src/ErrorBoundary.tsx` for web, `apps/mobile/src/components/ErrorBoundary.tsx` for mobile — the mobile version renders RN host components instead of `div`/`button`, since `packages/ui` targets web/DOM). Error boundaries only catch errors thrown during rendering/lifecycle methods, not errors from event handlers, timers, or unhandled promise rejections — see "Global error capture" below for how those are covered.
+
+`ErrorHandler` logs through the `Logger` set via `setLogger()` (`packages/core/src/services/logger.ts`). Each platform installs a local, file-based sink at startup instead of a remote error-tracking service, since crash/error data can include financial context that shouldn't leave the device:
+
+- Web: `WebFileLogger` (`apps/web/src/logging/web-file-logger.ts`) writes JSON-line entries to `app.log` in OPFS, falling back to `ConsoleLogger` where OPFS is unsupported.
+- Mobile: `MobileFileLogger` (`apps/mobile/src/logging/mobile-file-logger.ts`) writes to `<documentDirectory>/logs/app.log` via `expo-file-system`.
+- Desktop: `DesktopFileLogger` (`apps/desktop/src/logger.ts`) writes to `<userData>/logs/app.log` in the Electron main process, and `process.on('uncaughtException'|'unhandledRejection')` handlers route through `ErrorHandler` (`apps/desktop/src/main.ts`).
+
+All three sinks are simple ring-buffer-style: they truncate/rotate once the log file crosses a size cap rather than growing unbounded. Settings → Data → Logs (`apps/web/src/pages/SettingsLogs.tsx`, `apps/mobile/app/settings-logs.tsx`) shows the current log size and lets the user share/download it for a bug report — web triggers a browser download, mobile opens the native share sheet, desktop gets the web screen for free since its renderer loads the web bundle. The desktop main process's own log has no export UI (it's a separate process/file) — retrieving it means pulling it from `<userData>/logs/app.log` directly.
+
+#### Global error capture
+
+`ErrorBoundary` and explicit `try`/`catch` + `ErrorHandler.handle()` calls in the service layer only catch a subset of runtime errors. `installGlobalErrorHandlers()` closes the rest of the gap for errors that would otherwise vanish silently:
+
+- Web (`apps/web/src/logging/global-error-handlers.ts`, also covers desktop's renderer): `window.addEventListener('error', …)` and `('unhandledrejection', …)`.
+- Mobile (`apps/mobile/src/logging/global-error-handlers.ts`): wraps RN's `ErrorUtils.setGlobalHandler()` (chaining to the previous handler so LogBox/redbox and the default fatal-error restart behavior still run), plus Hermes's `HermesInternal.enablePromiseRejectionTracker` for unhandled promise rejections — but only outside `__DEV__`, since RN itself only wires that tracker up in dev (via LogBox) and never in production, and re-registering it in dev would clobber LogBox's own tracker.
+- Desktop main process: `process.on('uncaughtException'|'unhandledRejection')` in `main.ts` (see above).
+
+Still not covered by design: fully native crashes outside the JS runtime (would require a native crash reporter like Sentry/Crashlytics — deliberately out of scope given the local-only, privacy-first logging approach).
 
 ### Migration System
 
 Database migrations are in `packages/db/src/migrations/`. Each migration implements `{ version, up: string, down: string }`. The runner tracks applied versions in `schema_migrations` and runs pending migrations on app startup.
+
+### Budget Lifecycle (Soft-Delete and Carry-Forward)
+
+Budgets use a soft-delete pattern to support automatic monthly carry-forward without losing history.
+
+#### `is_deleted` flag
+
+Rows are never physically removed. Instead, `is_deleted = 1` marks a row as a *tombstone*. All read queries filter `AND is_deleted = 0`. A tombstone for period P acts as a *stop signal* — it blocks carry-forward propagation for that category past P.
+
+#### Auto carry-forward
+
+`getBudgetsWithProgress(month, year)` (service layer, current/future months only) calls `getBudgetDefaults(month, year)` first. That query finds the most-recent prior active row per category that has no existing row (active or deleted) for the requested period. The service then calls `createBudget` for each result, creating rows on demand — one month at a time, only when navigated to.
+
+#### Tombstone reactivation
+
+`createBudget` checks for a soft-deleted row matching `(categoryId, month, year)` before inserting. If found, it reactivates the existing row (`is_deleted = 0`, new amount) instead of inserting a duplicate. This preserves the unique constraint.
+
+#### Cascade delete
+
+Deleting a budget soft-deletes the target row *and* all future active rows for the same category:
+
+```sql
+UPDATE budgets SET is_deleted = 1
+WHERE category_id = ? AND is_deleted = 0
+  AND (year * 12 + month) > (? * 12 + ?)
+```
+
+This cleans up already-created future rows so they disappear immediately without waiting for the stop-signal to take effect.
+
+#### Cascade create (resume)
+
+Creating or reactivating a budget for month M clears all future tombstones for the same category *and* updates their amounts to match:
+
+```sql
+UPDATE budgets SET is_deleted = 0, amount = ?
+WHERE category_id = ? AND is_deleted = 1
+  AND (year * 12 + month) > (? * 12 + ?)
+```
+
+This resumes carry-forward from M with the new amount, restoring all future months in one operation.
+
+#### Period math
+
+`year * 12 + month` is used as an ordinal throughout — both in SQL expressions and in-memory mock logic — to compare calendar periods without date parsing.
 
 ### Date Handling
 
@@ -205,6 +410,7 @@ packages/db/src/repositories/
   categories-repository.ts
   currencies-repository.ts
   settings-repository.ts
+  recurring-transactions-repository.ts
 ```
 
 Tests are co-located in `__tests__/` next to each repository, using in-memory SQLite.
@@ -218,6 +424,7 @@ Tests are co-located in `__tests__/` next to each repository, using in-memory SQ
 - Vite + React (React Router)
 - SQLite via `@sqlite.org/sqlite-wasm` + OPFS (`apps/web/src/database/`)
 - React Router for navigation
+- Settings is a navigation menu — each section (`/settings/currencies`, `/settings/appearance`, etc.) is a separate route and page component under `apps/web/src/pages/`
 - `useTransactionFilters` hook syncs filter state to URL params
 - `useDebounce` hook (300ms) for search inputs
 
@@ -226,9 +433,18 @@ Tests are co-located in `__tests__/` next to each repository, using in-memory SQ
 - Expo / React Native
 - `expo-sqlite` for local database
 - Expo Router (file-based routing)
+- Settings is a navigation menu — each section (`settings-currencies`, `settings-appearance`, etc.) is a separate screen at the root of `apps/mobile/app/`
 - `useFocusEffect` from `@react-navigation/native` for data reload on tab focus
+- `useSafeRouter` (`apps/mobile/src/hooks/useSafeRouter.ts`) wraps `useRouter()` and debounces `.push()` — use it instead of `useRouter` for any row/button that navigates, so a rapid double-tap can't push a duplicate stack entry (which made the header Back button look broken, since it only popped the duplicate)
 - Modal-based selectors (not native Picker) for better UX
 - Jest for testing (not Vitest — React Native compatibility)
+
+### Desktop (`apps/desktop`)
+
+- Electron; the renderer loads the built `apps/web` bundle via a custom `app://` protocol (so it shares the web app's OPFS-backed SQLite and `WebFileLogger`)
+- `better-sqlite3` is present for a future native adapter but is currently unused — the renderer uses the web SQLite stack instead
+- Main process (`apps/desktop/src/main.ts`) has its own `DesktopFileLogger` and top-level `uncaughtException`/`unhandledRejection` handlers, since it runs in a separate Node process from the renderer
+- No test suite yet (no Jest/Vitest config) — main-process code is currently untested
 
 ---
 
@@ -248,6 +464,8 @@ Files excluded from coverage (untestable in current environment):
 
 - `apps/web/src/database/**` — browser WASM/OPFS
 - `apps/web/src/hooks/**` — React hooks
+- `apps/web/src/logging/web-file-logger.ts` — browser-specific OPFS file I/O
+- `apps/mobile/src/logging/mobile-file-logger.ts` — native `expo-file-system` file I/O
 - `packages/db/src/adapters/**` — platform SQLite adapters
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for test patterns, checklists, and examples.

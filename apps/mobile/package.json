@@ -1,6 +1,6 @@
 {
   "name": "@cashmgr/mobile",
-  "version": "0.4.1-beta.1",
+  "version": "1.0.0-rc.2",
   "private": true,
   "license": "AGPL-3.0-only",
   "main": "index.js",
@@ -11,7 +11,7 @@
     "ios": "expo run:ios",
     "ios:device": "expo run:ios --device",
     "web": "expo start --web",
-    "build": "expo export",
+    "build": "expo export --platform ios --platform android",
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -65,6 +65,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.23.7",
+    "@expo/config-plugins": "^56.0.8",
     "@testing-library/jest-native": "^5.4.3",
     "@testing-library/react-native": "^13.3.3",
     "@types/jest": "^29.5.14",

@@ -11,7 +11,7 @@
 #
 #   macOS (.dmg) cannot be built on Linux — run electron-builder natively on macOS:
 #     pnpm build:packages && pnpm --filter @cashmgr/desktop build:electron
-#     cd apps/desktop && pnpm exec electron-builder --mac
+#     cd apps/desktop && pnpm exec electron-builder --mac --publish=never
 #
 # Artifacts are written to apps/desktop/release/ inside the container.
 # Copy them out with:
@@ -65,4 +65,4 @@ RUN pnpm --filter @cashmgr/web build && \
 # Defaults to --linux (AppImage). Pass --build-arg PLATFORMS="--linux --win" for both.
 ARG PLATFORMS=--linux
 WORKDIR /app/apps/desktop
-RUN pnpm exec electron-builder ${PLATFORMS}
+RUN pnpm exec electron-builder ${PLATFORMS} --publish=never

@@ -15,6 +15,7 @@ export default defineConfig({
         '**/index.ts',
         'src/database/**', // Browser-specific WASM/IndexedDB adapter
         'src/hooks/**', // React hooks need jsdom + @testing-library/react
+        'src/logging/web-file-logger.ts', // Browser-specific OPFS file I/O
       ],
     },
   },

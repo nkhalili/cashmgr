@@ -2,6 +2,97 @@
 
 This document captures reusable UI patterns and styling guidelines for consistency across the application.
 
+## Page Breadcrumb (Web / Desktop)
+
+Used at the top of sub-pages to show context and provide one-click navigation back to the parent page. Applied to all Settings sub-pages; follow this pattern for any future sub-pages on web/desktop.
+
+### Breadcrumb Visual Design
+
+```text
+Settings  ›  Currencies
+```
+
+- "Settings" renders as a dimmed, primary-coloured link at h1 weight and size
+- On hover: opacity snaps to full and a 2 px underline slides in left-to-right
+- `›` separator is `textSecondary` colour, same font size
+- Page title (`h2`) follows at the same size and weight, full opacity
+
+### Breadcrumb Key Design Tokens
+
+| Element | Property | Value |
+| --- | --- | --- |
+| Link colour | `color` | `theme.colors.primary` |
+| Link / separator / title font size | `fontSize` | `theme.typography.h1.fontSize` |
+| Link / title font weight | `fontWeight` | `theme.typography.h1.fontWeight` |
+| Link resting opacity | `opacity` | `0.55` |
+| Separator colour | `color` | `theme.colors.textSecondary` |
+| Underline height | `height` | `2px` |
+| Underline animation | `transition` | `width 0.2s ease` |
+| Opacity animation | `transition` | `opacity 0.15s ease` |
+
+### CSS Class (App.css)
+
+```css
+.settings-breadcrumb-link {
+  position: relative;
+  text-decoration: none;
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+
+.settings-breadcrumb-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 0;
+  height: 2px;
+  background: currentColor;
+  border-radius: 1px;
+  transition: width 0.2s ease;
+}
+
+.settings-breadcrumb-link:hover {
+  opacity: 1;
+}
+
+.settings-breadcrumb-link:hover::after {
+  width: 100%;
+}
+```
+
+### Web Usage
+
+```tsx
+import { Link } from 'react-router-dom';
+
+<div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.md }}>
+  <Link
+    to="/parent-route"
+    className="settings-breadcrumb-link"
+    style={{
+      color: theme.colors.primary,
+      fontSize: theme.typography.h1.fontSize,
+      fontWeight: theme.typography.h1.fontWeight,
+    }}
+  >
+    Parent Page
+  </Link>
+  <span style={{ color: theme.colors.textSecondary, fontSize: theme.typography.h1.fontSize }}>›</span>
+  <h2 style={{ margin: 0, fontSize: theme.typography.h1.fontSize, fontWeight: theme.typography.h1.fontWeight }}>
+    Current Page
+  </h2>
+</div>
+```
+
+### Breadcrumb Usage Examples
+
+- **Settings › Currencies**
+- **Settings › Appearance**
+- **Settings › Backup**
+
+---
+
 ## Period Navigator (Month/Year Navigation)
 
 A card-header style navigation component for navigating between time periods (months, years).
@@ -135,7 +226,7 @@ import { Ionicons } from '@expo/vector-icons';
 </div>
 ```
 
-### Key Design Tokens
+### Period Navigator Key Design Tokens
 
 | Property | Value |
 | --- | --- |
@@ -180,7 +271,7 @@ const navigateYear = (direction: 'prev' | 'next') => {
 };
 ```
 
-### Usage Examples
+### Period Navigator Usage Examples
 
 - **Transactions page**: Month navigation (`January 2026`)
 - **Dashboard**: Year navigation (`2026`)
@@ -190,3 +281,261 @@ const navigateYear = (direction: 'prev' | 'next') => {
 - Buttons should have `type="button"` on web
 - Use `TouchableOpacity` on mobile for proper touch feedback
 - Icons should be semantic (chevron-back/chevron-forward)
+
+---
+
+## Grouped List with Section Totals
+
+Used on the Accounts page to split a flat list into labelled sections, each showing an aggregate total. Apply this pattern whenever a list of items naturally belongs to a small number of mutually exclusive categories and a per-category aggregate is meaningful.
+
+### Layout
+
+```text
+┌─────────────────────────────────────────┐
+│  Bank Accounts              $4,200.00   │  ← section header (label + total)
+│  ─────────────────────────────────────  │
+│  Chequing                     $3,200.00 │
+│  Savings                      $1,000.00 │
+└─────────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│  Credit Cards               -$350.00   │  ← total red when negative
+│  ─────────────────────────────────────  │
+│  Visa                         -$350.00  │
+└─────────────────────────────────────────┘
+```
+
+- Section header: group label left-aligned, aggregate total right-aligned
+- Header separated from items by a 1px border
+- Total colour: `theme.colors.danger` when the aggregate is negative, `theme.colors.textPrimary` otherwise
+- Empty sections are hidden — do not render a header with no items
+
+### Total Calculation
+
+Totals are converted to the primary currency using stored exchange rates. If no primary currency is set (currencies not yet loaded), totals fall back to per-currency strings joined with ` + `.
+
+```typescript
+function getGroupTotal(accounts: Account[], currencies: Currency[]): { formatted: string; isNegative: boolean } {
+  const primary = currencies.find((c) => c.isPrimary);
+  if (!primary) {
+    const totals: Record<string, number> = {};
+    for (const account of accounts) {
+      totals[account.currency] = (totals[account.currency] ?? 0) + account.balance;
+    }
+    return {
+      formatted: Object.entries(totals)
+        .map(([currency, total]) => formatCurrency(total, currency))
+        .join(' + '),
+      isNegative: Object.values(totals).every((v) => v < 0),
+    };
+  }
+  const rateMap = new Map(currencies.map((c) => [c.id, c.exchangeRate]));
+  let total = 0;
+  for (const account of accounts) {
+    total += account.balance * (rateMap.get(account.currency) ?? 1);
+  }
+  return { formatted: formatCurrency(total, primary.id), isNegative: total < 0 };
+}
+```
+
+### Web Section Header
+
+```tsx
+<div
+  style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+    borderBottom: `1px solid ${theme.colors.border}`,
+  }}
+>
+  <span style={{ fontSize: theme.typography.h3.fontSize, fontWeight: theme.typography.h3.fontWeight, color: theme.colors.textPrimary }}>
+    {group.label}
+  </span>
+  <span style={{ fontSize: theme.typography.body.fontSize, fontWeight: 600, color: groupTotal.isNegative ? theme.colors.danger : theme.colors.textPrimary }}>
+    {groupTotal.formatted}
+  </span>
+</div>
+```
+
+### Mobile Section Header (SectionList)
+
+```tsx
+const renderSectionHeader = ({ section }: { section: { label: string; total: string; isNegative: boolean } }) => (
+  <View style={styles.sectionHeader}>
+    <Text style={styles.sectionHeaderLabel}>{section.label}</Text>
+    <Text style={[styles.sectionHeaderTotal, section.isNegative && styles.sectionHeaderTotalNegative]}>
+      {section.total}
+    </Text>
+  </View>
+);
+```
+
+Use `SectionList` with `stickySectionHeadersEnabled={false}` so headers scroll with the content.
+
+### Design Tokens
+
+| Element | Property | Value |
+| --- | --- | --- |
+| Header border | `borderBottom` | `1px solid theme.colors.border` |
+| Label font size | `fontSize` | `theme.typography.h3.fontSize` |
+| Label font weight | `fontWeight` | `theme.typography.h3.fontWeight` |
+| Total font size | `fontSize` | `theme.typography.body.fontSize` |
+| Total font weight | `fontWeight` | `600` |
+| Total colour (positive) | `color` | `theme.colors.textPrimary` |
+| Total colour (negative) | `color` | `theme.colors.danger` |
+
+### Usage Examples
+
+- **Accounts page**: Cash / Bank Accounts / Credit Cards
+
+### Credit Account Sub-lines
+
+When the "show balance payable / outstanding balance" setting is on, credit-type rows show two extra lines below the currency (in the `subtitle` slot on web, as extra `Text` lines under the account name on mobile) whenever `statementDay` is configured for that account:
+
+```text
+Visa
+USD
+Outstanding: $850.25
+Payable by 2026-02-05: $600.00
+```
+
+Sourced from `calculateCreditAccountSummary` (`@cashmgr/core`) via each app's `getCreditAccountSummaries` helper (`apps/{web,mobile}/src/services/credit-account-summary.ts`). Omit the sub-lines entirely for accounts without `statementDay` set — no forced setup nagging.
+
+### Inline Status Emoji (Transaction Rows)
+
+Transaction rows don't have a separate leading-icon element — the category's own emoji (`Category.icon`) is already inlined directly into the title text (`` `${category.icon} ${category.name}` ``). Boolean per-transaction flags follow the same convention: prepend a single emoji + space to the title string rather than adding a new visual element.
+
+Example — **recurring indicator**: transactions generated from a recurring template (`transaction.recurringTransactionId` set) get a 🔁 prefix:
+
+```tsx
+// web: Transactions.tsx — title prop
+title={`${transaction.recurringTransactionId ? '🔁 ' : ''}${categoryTitle}`}
+
+// mobile: transactions.tsx / account-transactions.tsx — displayTitle
+if (transaction.recurringTransactionId) {
+  displayTitle = `🔁 ${displayTitle}`;
+}
+```
+
+Only the auto-generated occurrences carry `recurringTransactionId` — the transaction that originally started a series (whether created directly as recurring, or turned recurring via Edit Transaction) is not retroactively flagged. See [Recurring Transactions](recurring-transactions.md).
+
+---
+
+## Grouped Account Picker (no totals)
+
+Used wherever an account is *chosen* rather than browsed — the Account/From Account/To Account fields on Add/Edit Transaction and the recurring transaction editor. Same three-group split as the pattern above (Cash / Bank Accounts / Credit Cards) but without per-group totals, since the goal here is fast recognition, not a balance summary.
+
+Group accounts with the shared `ACCOUNT_TYPE_GROUPS` constant from `@cashmgr/core` (`packages/core/src/models/Account.ts`) — do not redefine the group list locally:
+
+```typescript
+const groupAccounts = (list: Account[]) =>
+  ACCOUNT_TYPE_GROUPS
+    .map((group) => ({ ...group, accounts: list.filter((a) => a.type === group.type) }))
+    .filter((group) => group.accounts.length > 0);
+```
+
+Empty groups are hidden, same as the Accounts page — e.g. the "To Account" list in a transfer omits a group entirely if its only account is the selected source account.
+
+### Web (`<optgroup>`)
+
+```tsx
+<select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+  <option value="">Select account...</option>
+  {accountGroups.map((group) => (
+    <optgroup key={group.type} label={group.label}>
+      {group.accounts.map((account) => (
+        <option key={account.id} value={account.id}>{account.name} ({account.currency})</option>
+      ))}
+    </optgroup>
+  ))}
+</select>
+```
+
+### Mobile (section header `Text` inside the picker `Modal`)
+
+```tsx
+{accountGroups.map((group) => (
+  <React.Fragment key={group.type}>
+    <Text style={styles.modalSectionHeader}>{group.label}</Text>
+    {group.accounts.map((account) => (
+      <Pressable key={account.id} style={styles.modalOption} onPress={() => handleSelectAccount(account.id)}>
+        <Text style={styles.modalOptionText}>{account.name} ({account.currency})</Text>
+        {accountId === account.id && <Text style={styles.modalOptionCheck}>✓</Text>}
+      </Pressable>
+    ))}
+  </React.Fragment>
+))}
+```
+
+`modalSectionHeader` style: `theme.typography.caption.fontSize`, `fontWeight: 600`, `theme.colors.textSecondary`, uppercase, `theme.spacing.lg` horizontal padding.
+
+### Account Picker Usage Examples
+
+- **Add/Edit Transaction**: Account, From Account, To Account
+- **Recurring Transaction editor**: Account, From Account, To Account
+
+---
+
+## Switch (iOS-style on/off toggle)
+
+A pill-shaped on/off toggle, used for boolean settings (e.g. "Make recurring", credit account auto-payment, the "show balance payable" setting).
+
+### Switch Visual Design
+
+```text
+Label                    ( ⚪────)   off: track = theme.colors.border
+Helper text               (────⚪ )   on:  track = theme.colors.primary
+```
+
+- Track: 44×26px, fully rounded (`borderRadius: 13`)
+- Thumb: 20×20px circle, white, 3px inset from the track edge, slides to the far side based on state
+- Label + helper text (optional) sit to the left, track to the right, row spread with `justify-content: space-between`
+
+### Switch Design Tokens
+
+| Element | Property | Value |
+| --- | --- | --- |
+| Track width / height | — | 44px / 26px |
+| Track border radius | `borderRadius` | 13px (half of height) |
+| Track color (on) | `backgroundColor` | `theme.colors.primary` |
+| Track color (off) | `backgroundColor` | `theme.colors.border` |
+| Thumb size | — | 20×20px |
+| Thumb color | `backgroundColor` | `#fff` |
+| Label font size | `fontSize` | `theme.typography.body.fontSize` |
+| Helper text font size | `fontSize` | `theme.typography.caption.fontSize` |
+
+### Switch Usage
+
+```tsx
+// Web — from @cashmgr/ui
+import { Switch } from '@cashmgr/ui';
+
+<Switch
+  value={autoPaymentEnabled}
+  onChange={setAutoPaymentEnabled}
+  label="Auto payment"
+  helperText="Automatically pay from the payment account on the due date"
+/>
+```
+
+```tsx
+// Mobile — apps/mobile/src/components/Switch.tsx
+import { Switch } from '../src/components/Switch';
+
+<Switch
+  value={autoPaymentEnabled}
+  onChange={setAutoPaymentEnabled}
+  label="Auto payment"
+  helperText="Automatically pay from the payment account on the due date"
+/>
+```
+
+Omit `label`/`helperText` to render just the bare track (e.g. inline in a row you've already labelled yourself).
+
+### Switch Usage Examples
+
+- **Add/Edit Transaction**: "Make recurring"
+- **Add/Edit Account**: "Auto payment" (credit accounts)
+- **Settings › Appearance**: "Show balance payable / outstanding balance"

@@ -54,6 +54,7 @@ export interface ThemeColorSet {
   textSecondary: string;
   textMuted: string;
   success: string;
+  successSoft: string;
   warning: string;
   danger: string;
   border: string;
@@ -174,6 +175,7 @@ const lightColors: ThemeColorSet = {
   textSecondary: '#51606a',
   textMuted: '#89959c',
   success: '#2e9d83',
+  successSoft: '#d1fae5',
   warning: '#c78b46',
   danger: '#c96868',
   border: '#d6e1de',
@@ -192,6 +194,7 @@ const darkColors: ThemeColorSet = {
   textSecondary: '#b4c0c6',
   textMuted: '#7f8b92',
   success: '#4fd6b5',
+  successSoft: '#1a3d2e',
   warning: '#e1b05f',
   danger: '#f28585',
   border: '#2f3a3f',

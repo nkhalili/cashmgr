@@ -15,8 +15,8 @@ import {
   useTheme,
   getCategoryColor,
 } from '@cashmgr/ui';
-import type { CategoryAggregation, DashboardSummary, DashboardFilter, PeriodMode } from '@cashmgr/core';
-import { useDashboardService } from '../services/services-context';
+import type { CategoryAggregation, DashboardSummary, DashboardFilter, PeriodMode, BudgetWithProgress } from '@cashmgr/core';
+import { useDashboardService, useBudgetsService } from '../services/services-context';
 import { formatCurrency, ErrorHandler, navigateMonth as navigateMonthUtil, getMonthLabel } from '@cashmgr/core';
 import type { TotalBalanceResult } from '../services/dashboard-service';
 import { renderCustomLabel, type LabelPosition } from '../utils/pie-chart-labels';
@@ -25,6 +25,7 @@ import { MonthNavigator } from '../components/MonthNavigator';
 export function Dashboard() {
   const theme = useTheme();
   const dashboardService = useDashboardService();
+  const budgetsService = useBudgetsService();
 
   // Current date for defaults
   const now = new Date();
@@ -41,6 +42,7 @@ export function Dashboard() {
   const [categoryBreakdown, setCategoryBreakdown] = React.useState<CategoryAggregation[]>([]);
   const [summary, setSummary] = React.useState<DashboardSummary>({ totalIncome: 0, totalExpenses: 0, netBalance: 0 });
   const [totalBalance, setTotalBalance] = React.useState<TotalBalanceResult | null>(null);
+  const [budgetMap, setBudgetMap] = React.useState<Map<string, BudgetWithProgress>>(new Map());
   const [loading, setLoading] = React.useState(true);
 
   // Build filter object
@@ -88,12 +90,19 @@ export function Dashboard() {
       setCategoryBreakdown(breakdown);
       setSummary(summaryData);
       setTotalBalance(balanceData);
+
+      if (periodMode === 'monthly' && transactionType === 'expense') {
+        const budgets = await budgetsService.getBudgetsWithProgress(selectedMonth + 1, selectedYear);
+        setBudgetMap(new Map(budgets.map((b) => [b.categoryId, b])));
+      } else {
+        setBudgetMap(new Map());
+      }
     } catch (error) {
       ErrorHandler.handle(error, 'Dashboard.loadData');
     } finally {
       setLoading(false);
     }
-  }, [dashboardService, buildFilter]);
+  }, [dashboardService, budgetsService, buildFilter, periodMode, transactionType, selectedMonth, selectedYear]);
 
   React.useEffect(() => {
     loadData();
@@ -512,49 +521,119 @@ export function Dashboard() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm }}>
               {categoryBreakdown.map((category, index) => (
-                <div
-                  key={category.categoryId}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: theme.spacing.sm,
-                    padding: theme.spacing.sm,
-                    borderRadius: theme.radii.sm,
-                    backgroundColor: theme.colors.surfaceMuted,
-                  }}
-                >
-                  {/* Category Icon with Color Background */}
-                  <span
+                <div key={category.categoryId} style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm }}>
+                  <div
                     style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '50%',
-                      backgroundColor: getCategoryColor(index, transactionType),
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 14,
-                      flexShrink: 0,
+                      gap: theme.spacing.sm,
+                      padding: theme.spacing.sm,
+                      borderRadius: theme.radii.sm,
+                      backgroundColor: theme.colors.surfaceMuted,
                     }}
                   >
-                    {category.categoryIcon || ''}
-                  </span>
-                  {/* Name */}
-                  <span style={{ flex: 1, color: theme.colors.textPrimary }}>
-                    {category.categoryName}
-                  </span>
-                  {/* Amount */}
-                  <span
-                    style={{
-                      fontWeight: theme.typography.numeric.fontWeight,
-                      fontFeatureSettings: '"tnum" 1, "lnum" 1',
-                      color: theme.colors.textPrimary,
-                    }}
-                  >
-                    {formatCurrency(category.total)}
-                  </span>
-                  {/* Percentage Badge */}
-                  <Badge label={`${category.percentage}%`} tone="neutral" />
+                    {/* Category Icon with Color Background */}
+                    <span
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        backgroundColor: getCategoryColor(index, transactionType),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 14,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {category.categoryIcon || ''}
+                    </span>
+                    {/* Name + budget badge stacked vertically */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <span style={{ color: theme.colors.textPrimary }}>
+                        {category.categoryName}
+                      </span>
+                      {periodMode === 'monthly' && transactionType === 'expense' && (() => {
+                        const budget = budgetMap.get(category.categoryId);
+                        if (!budget) return null;
+                        return budget.spent > budget.amount
+                          ? <Badge label="Over budget" tone="danger" style={{ fontSize: 9, padding: '1px 5px', alignSelf: 'flex-start' }} />
+                          : <Badge label="On budget" tone="success" style={{ fontSize: 9, padding: '1px 5px', alignSelf: 'flex-start' }} />;
+                      })()}
+                    </div>
+                    {/* Amount */}
+                    <span
+                      style={{
+                        fontWeight: theme.typography.numeric.fontWeight,
+                        fontFeatureSettings: '"tnum" 1, "lnum" 1',
+                        color: theme.colors.textPrimary,
+                      }}
+                    >
+                      {formatCurrency(category.total)}
+                    </span>
+                    {/* Percentage Badge */}
+                    <Badge label={`${category.percentage}%`} tone="neutral" />
+                  </div>
+                  {/* Sub-categories, indented, percentage relative to parent's total */}
+                  {category.subcategories?.map((sub) => (
+                    <div
+                      key={sub.categoryId}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: theme.spacing.sm,
+                        padding: theme.spacing.sm,
+                        marginLeft: theme.spacing.xl,
+                        borderRadius: theme.radii.sm,
+                        backgroundColor: theme.colors.surface,
+                        border: `1px solid ${theme.colors.border}`,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: '50%',
+                          backgroundColor: getCategoryColor(index, transactionType),
+                          opacity: 0.6,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 12,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {sub.categoryIcon || ''}
+                      </span>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <span style={{ color: theme.colors.textSecondary, fontSize: theme.typography.caption.fontSize }}>
+                          {sub.categoryName}
+                        </span>
+                        {periodMode === 'monthly' && transactionType === 'expense' && (() => {
+                          const budget = budgetMap.get(sub.categoryId);
+                          if (!budget) return null;
+                          return budget.spent > budget.amount
+                            ? <Badge label="Over budget" tone="danger" style={{ fontSize: 9, padding: '1px 5px', alignSelf: 'flex-start' }} />
+                            : <Badge label="On budget" tone="success" style={{ fontSize: 9, padding: '1px 5px', alignSelf: 'flex-start' }} />;
+                        })()}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                        <span
+                          style={{
+                            fontWeight: theme.typography.numeric.fontWeight,
+                            fontFeatureSettings: '"tnum" 1, "lnum" 1',
+                            color: theme.colors.textSecondary,
+                            fontSize: theme.typography.caption.fontSize,
+                          }}
+                        >
+                          {formatCurrency(sub.total)}
+                        </span>
+                        <span style={{ color: theme.colors.textSecondary, fontSize: 10, whiteSpace: 'nowrap' }}>
+                          {sub.percentage}% of {category.categoryName}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>

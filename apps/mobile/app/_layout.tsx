@@ -1,12 +1,25 @@
 import React from 'react';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@cashmgr/ui';
+import { setLogger } from '@cashmgr/core';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
+import { MobileFileLogger } from '../src/logging/mobile-file-logger';
+import { installGlobalErrorHandlers } from '../src/logging/global-error-handlers';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { ThemePreferenceProvider } from '../src/contexts/theme-context';
+import { CreditDisplayProvider } from '../src/contexts/credit-display-context';
 import { ServicesProvider } from '../src/contexts/services-context';
+import { UpdateBanner } from '../src/components/UpdateBanner';
+import { useStoreUpdateCheck } from '../src/hooks/useStoreUpdateCheck';
+import { UpdateDevContext } from '../src/contexts/update-context';
+
+setLogger(new MobileFileLogger());
+installGlobalErrorHandlers();
 
 function RootStack() {
   const theme = useTheme();
+  const { updateVersion, storeUrl, dismiss, simulateUpdate } = useStoreUpdateCheck();
 
   const navTheme = React.useMemo(() => {
     const base = theme.mode === 'dark' ? DarkTheme : DefaultTheme;
@@ -25,28 +38,43 @@ function RootStack() {
   }, [theme]);
 
   return (
-    <NavThemeProvider value={navTheme}>
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: theme.colors.surface },
-          headerTitleStyle: { color: theme.colors.textPrimary, fontFamily: theme.fontFamily },
-          headerTintColor: theme.colors.textPrimary,
-          headerShadowVisible: false,
-          contentStyle: { backgroundColor: theme.colors.background },
-        }}
-      >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      </Stack>
-    </NavThemeProvider>
+    <UpdateDevContext.Provider value={{ simulateUpdate }}>
+      <View style={{ flex: 1 }}>
+        <NavThemeProvider value={navTheme}>
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: theme.colors.surface },
+              headerTitleStyle: { color: theme.colors.textPrimary, fontFamily: theme.fontFamily },
+              headerTintColor: theme.colors.textPrimary,
+              headerShadowVisible: false,
+              contentStyle: { backgroundColor: theme.colors.background },
+            }}
+          >
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          </Stack>
+        </NavThemeProvider>
+        {updateVersion && (
+          <UpdateBanner
+            version={updateVersion}
+            storeUrl={storeUrl}
+            onDismiss={dismiss}
+          />
+        )}
+      </View>
+    </UpdateDevContext.Provider>
   );
 }
 
 export default function RootLayout() {
   return (
-    <ThemePreferenceProvider>
-      <ServicesProvider>
-        <RootStack />
-      </ServicesProvider>
-    </ThemePreferenceProvider>
+    <ErrorBoundary>
+      <ThemePreferenceProvider>
+        <CreditDisplayProvider>
+          <ServicesProvider>
+            <RootStack />
+          </ServicesProvider>
+        </CreditDisplayProvider>
+      </ThemePreferenceProvider>
+    </ErrorBoundary>
   );
 }

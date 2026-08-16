@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   TextStyle,
 } from 'react-native';
+import { useKeyboardHeight } from '../src/hooks/useKeyboardHeight';
 import { useRouter, Stack } from 'expo-router';
 import { Theme, useTheme } from '@cashmgr/ui';
 import { AppError, ErrorHandler, CreateCurrencyInputSchema, Currency } from '@cashmgr/core';
@@ -32,6 +33,8 @@ export default function AddCurrencyScreen() {
   const router = useRouter();
   const currenciesService = useCurrenciesService();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const keyboardHeight = useKeyboardHeight();
 
   const [currencyId, setCurrencyId] = React.useState('');
   const [currencyName, setCurrencyName] = React.useState('');
@@ -143,8 +146,8 @@ export default function AddCurrencyScreen() {
           headerBackTitle: 'Settings',
         }}
       />
-      <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.content}>
+      <View style={[styles.container, keyboardHeight > 0 && { paddingBottom: keyboardHeight }]}>
+        <ScrollView ref={scrollViewRef} style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <Text style={styles.title}>Add Currency</Text>
             <Text style={styles.subtitle}>Add a new currency with exchange rate</Text>
@@ -280,6 +283,7 @@ export default function AddCurrencyScreen() {
                   }
                 }}
                 onBlur={() => validateField('exchangeRate', getFormValues())}
+                onFocus={() => setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 150)}
                 keyboardType="decimal-pad"
               />
               {errors.exchangeRate && (
@@ -315,33 +319,33 @@ export default function AddCurrencyScreen() {
               </Text>
             </View>
           </View>
-        </ScrollView>
 
-        {/* Fixed Bottom Actions */}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.button, styles.cancelButton]}
-            onPress={handleCancel}
-            disabled={isSubmitting}
-          >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.button,
-              styles.submitButton,
-              (!isValid || isSubmitting) && styles.buttonDisabled,
-            ]}
-            onPress={handleSubmit}
-            disabled={!isValid || isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.submitButtonText}>Add currency</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+          {/* Actions */}
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.button, styles.cancelButton]}
+              onPress={handleCancel}
+              disabled={isSubmitting}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.button,
+                styles.submitButton,
+                (!isValid || isSubmitting) && styles.buttonDisabled,
+              ]}
+              onPress={handleSubmit}
+              disabled={!isValid || isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.submitButtonText}>Add currency</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
     </>
   );
@@ -356,9 +360,11 @@ const createStyles = (theme: Theme) =>
       flex: 1,
       backgroundColor: theme.colors.background,
     },
+    scroll: {
+      flex: 1,
+    },
     content: {
       padding: theme.spacing.lg,
-      paddingBottom: 100,
     },
     header: {
       marginBottom: theme.spacing.lg,
@@ -480,16 +486,10 @@ const createStyles = (theme: Theme) =>
       lineHeight: 18,
     },
     actions: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
       flexDirection: 'row',
       gap: theme.spacing.md,
       padding: theme.spacing.lg,
-      backgroundColor: theme.colors.background,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.border,
+      marginTop: theme.spacing.lg,
     },
     button: {
       flex: 1,

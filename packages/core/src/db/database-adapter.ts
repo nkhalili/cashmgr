@@ -2,6 +2,8 @@ import { Transaction, CreateTransactionInput, UpdateTransactionInput } from '../
 import { Account, CreateAccountInput, UpdateAccountInput } from '../models/Account';
 import { Category, CreateCategoryInput, UpdateCategoryInput } from '../models/Category';
 import { Currency, CreateCurrencyInput, UpdateCurrencyInput } from '../models/Currency';
+import { Budget, CreateBudgetInput, UpdateBudgetInput, BudgetWithProgress } from '../models/Budget';
+import { RecurringTransaction, CreateRecurringTransactionInput, UpdateRecurringTransactionInput } from '../models/RecurringTransaction';
 import { CategoryType, CategoryAggregation, FilterParams, PaginationParams } from '../types';
 
 /**
@@ -14,6 +16,9 @@ export interface BulkUpsertData {
   categories?: Category[];
   currencies?: Currency[];
   transactions?: Transaction[];
+  budgets?: Budget[];
+  deletedBudgets?: Budget[];
+  recurringTransactions?: RecurringTransaction[];
   settings?: Record<string, string>;
   clearExisting?: boolean;
 }
@@ -69,6 +74,25 @@ export interface DatabaseAdapter {
   // F-062: Export/Import operations
   getAllSettings(): Promise<Record<string, string>>;
   bulkUpsert(data: BulkUpsertData): Promise<void>;
+
+  // Budget operations (F-063)
+  createBudget(input: CreateBudgetInput): Promise<Budget>;
+  getBudgetById(id: string): Promise<Budget | null>;
+  getBudgets(month: number, year: number): Promise<Budget[]>;
+  getAllBudgets(): Promise<Budget[]>;
+  getEffectiveTombstones(): Promise<Budget[]>;
+  getBudgetsWithProgress(month: number, year: number): Promise<BudgetWithProgress[]>;
+  getBudgetDefaults(month: number, year: number): Promise<{ categoryId: string; amount: number }[]>;
+  updateBudget(input: UpdateBudgetInput): Promise<Budget>;
+  deleteBudget(id: string): Promise<void>;
+
+  // Recurring transaction operations
+  createRecurringTransaction(input: CreateRecurringTransactionInput): Promise<RecurringTransaction>;
+  getRecurringTransactionById(id: string): Promise<RecurringTransaction | null>;
+  getRecurringTransactions(activeOnly?: boolean): Promise<RecurringTransaction[]>;
+  updateRecurringTransaction(input: UpdateRecurringTransactionInput): Promise<RecurringTransaction>;
+  deleteRecurringTransaction(id: string): Promise<void>;
+  getTransactionsByRecurringId(recurringId: string): Promise<Transaction[]>;
 
   // Migration operations (F-022)
   getCurrentSchemaVersion(): Promise<number>;

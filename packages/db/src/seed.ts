@@ -22,6 +22,7 @@ export const SEED_ACCOUNTS: Omit<Account, 'id' | 'createdAt' | 'updatedAt'>[] = 
     currency: 'USD',
     balance: 5420.50,
     initialBalance: 5000.00,
+    autoPaymentEnabled: false,
   },
   {
     name: 'Savings Account',
@@ -29,6 +30,7 @@ export const SEED_ACCOUNTS: Omit<Account, 'id' | 'createdAt' | 'updatedAt'>[] = 
     currency: 'USD',
     balance: 15000.00,
     initialBalance: 10000.00,
+    autoPaymentEnabled: false,
   },
   {
     name: 'Credit Card',
@@ -36,6 +38,7 @@ export const SEED_ACCOUNTS: Omit<Account, 'id' | 'createdAt' | 'updatedAt'>[] = 
     currency: 'USD',
     balance: -850.25,
     initialBalance: 0,
+    autoPaymentEnabled: false,
   },
   {
     name: 'Cash Wallet',
@@ -43,6 +46,7 @@ export const SEED_ACCOUNTS: Omit<Account, 'id' | 'createdAt' | 'updatedAt'>[] = 
     currency: 'USD',
     balance: 320.00,
     initialBalance: 500.00,
+    autoPaymentEnabled: false,
   },
 ];
 
@@ -226,6 +230,20 @@ export async function seedDatabase(
     const accountIds: string[] = [];
     const categoryIds = { income: [] as string[], expense: [] as string[] };
 
+    // Ensure USD primary currency exists (seed data uses USD throughout)
+    const existingUsd = await db.query<{ count: number }>(
+      "SELECT COUNT(*) as count FROM currencies WHERE id = 'USD'"
+    );
+    if (existingUsd[0].count === 0) {
+      const now = Date.now();
+      await db.execute(
+        `INSERT INTO currencies (id, name, symbol, is_primary, exchange_rate, last_updated, is_active, created_at, updated_at)
+         VALUES ('USD', 'US Dollar', '$', 1, 1.0, ?, 1, ?, ?)`,
+        [now, now, now]
+      );
+      console.log('  ✅ Created USD primary currency');
+    }
+
     // Seed accounts
     console.log('  Creating accounts...');
     for (const account of SEED_ACCOUNTS) {
@@ -302,10 +320,14 @@ export async function clearSeedData(db: SqliteDatabase): Promise<void> {
   console.log('🧹 Clearing seed data...');
 
   try {
-    // Delete in reverse order due to foreign keys
+    // Delete in dependency order
     await db.execute('DELETE FROM transactions');
+    await db.execute('DELETE FROM recurring_transactions');
+    await db.execute('DELETE FROM budgets');
     await db.execute('DELETE FROM categories');
     await db.execute('DELETE FROM accounts');
+    await db.execute('DELETE FROM currencies');
+    await db.execute('DELETE FROM settings');
 
     console.log('✅ All seed data cleared');
   } catch (error) {

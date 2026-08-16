@@ -14,6 +14,7 @@ export interface InputProps {
   style?: React.CSSProperties;
   required?: boolean; // F-026: Show asterisk and mark as required
   onBlur?: () => void; // F-026: Validation trigger
+  autoFocus?: boolean;
 }
 
 export const Input: React.FC<InputProps> = ({
@@ -29,6 +30,7 @@ export const Input: React.FC<InputProps> = ({
   style,
   required = false,
   onBlur,
+  autoFocus = false,
 }) => {
   const theme = useTheme();
   const [isFocused, setIsFocused] = React.useState(false);
@@ -83,6 +85,7 @@ export const Input: React.FC<InputProps> = ({
           placeholder={placeholder}
           disabled={disabled}
           required={required}
+          autoFocus={autoFocus}
           onFocus={() => setIsFocused(true)}
           onBlur={() => {
             setIsFocused(false);

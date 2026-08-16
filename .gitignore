@@ -68,6 +68,11 @@ google-service-account.json
 # OS
 Thumbs.db
 
+# Jekyll
+docs/_site/
+docs/.jekyll-cache/
+docs/.jekyll-metadata
+
 # AI tools configuration
 CLAUDE.md
 .claude/

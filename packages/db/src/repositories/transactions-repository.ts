@@ -26,6 +26,7 @@ type TransactionRow = {
   categoryId: string | null; // Null for transfers
   toAccountId: string | null;
   notes: string | null;
+  recurringTransactionId: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -40,6 +41,7 @@ const TRANSACTION_SELECT_COLUMNS = `
   category_id as categoryId,
   to_account_id as toAccountId,
   notes,
+  recurring_transaction_id as recurringTransactionId,
   created_at as createdAt,
   updated_at as updatedAt
 `;
@@ -75,9 +77,10 @@ export class TransactionsRepository {
           category_id,
           to_account_id,
           notes,
+          recurring_transaction_id,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
       `,
       [
         id,
@@ -89,6 +92,7 @@ export class TransactionsRepository {
         input.categoryId ?? null, // Null for transfers
         input.toAccountId ?? null,
         input.notes ?? null,
+        input.recurringTransactionId ?? null,
         now,
         now,
       ],
@@ -104,6 +108,7 @@ export class TransactionsRepository {
       categoryId: input.categoryId,
       toAccountId: input.toAccountId,
       notes: input.notes,
+      recurringTransactionId: input.recurringTransactionId,
       createdAt: now,
       updatedAt: now,
     };
@@ -370,6 +375,7 @@ export class TransactionsRepository {
       categoryId: row.categoryId ?? undefined, // Undefined for transfers
       toAccountId: row.toAccountId ?? undefined,
       notes: row.notes ?? undefined,
+      recurringTransactionId: row.recurringTransactionId ?? undefined,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

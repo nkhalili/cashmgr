@@ -14,8 +14,9 @@ import {
   Pressable,
   Alert,
 } from 'react-native';
-import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { useLocalSearchParams, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeRouter } from '../src/hooks/useSafeRouter';
 import { Theme, useTheme } from '@cashmgr/ui';
 import {
   Account,
@@ -92,7 +93,7 @@ const SearchBar = React.memo(({
 // F-053: Account-specific transactions screen
 export default function AccountTransactionsScreen() {
   const theme = useTheme();
-  const router = useRouter();
+  const router = useSafeRouter();
   const { accountId } = useLocalSearchParams<{ accountId: string }>();
   const accountsService = useAccountsService();
   const categoriesService = useCategoriesService();
@@ -174,22 +175,23 @@ export default function AccountTransactionsScreen() {
     'December',
   ];
 
-  // Load reference data on mount
-  React.useEffect(() => {
-    const loadReferenceData = async () => {
-      try {
-        const [accountsData, categoriesData] = await Promise.all([
-          accountsService.listAccounts(),
-          categoriesService.listCategories(),
-        ]);
-        setAccounts(accountsData);
-        setCategories(categoriesData);
-      } catch (err) {
-        ErrorHandler.handle(err, 'AccountTransactions.loadReferenceData');
-      }
-    };
-    void loadReferenceData();
+  // Load reference data (accounts + categories)
+  const loadReferenceData = React.useCallback(async () => {
+    try {
+      const [accountsData, categoriesData] = await Promise.all([
+        accountsService.listAccounts(),
+        categoriesService.listCategories(),
+      ]);
+      setAccounts(accountsData);
+      setCategories(categoriesData);
+    } catch (err) {
+      ErrorHandler.handle(err, 'AccountTransactions.loadReferenceData');
+    }
   }, [accountsService, categoriesService]);
+
+  React.useEffect(() => {
+    void loadReferenceData();
+  }, [loadReferenceData]);
 
   // Load transactions based on filters
   const loadTransactions = React.useCallback(async () => {
@@ -378,7 +380,7 @@ export default function AccountTransactionsScreen() {
             onPress: async () => {
               try {
                 await transactionsService.deleteTransaction(transaction.id);
-                await loadTransactions();
+                await Promise.all([loadTransactions(), loadReferenceData()]);
               } catch (err) {
                 const errorMessage =
                   err instanceof AppError ? err.getUserMessage() : 'Failed to delete transaction';
@@ -389,7 +391,7 @@ export default function AccountTransactionsScreen() {
         ]
       );
     },
-    [transactionsService, loadTransactions]
+    [transactionsService, loadTransactions, loadReferenceData]
   );
 
   // Render filter chip
@@ -556,6 +558,9 @@ export default function AccountTransactionsScreen() {
       displayTitle = category
         ? (category.icon ? `${category.icon} ${category.name}` : category.name)
         : 'Uncategorized';
+    }
+    if (transaction.recurringTransactionId) {
+      displayTitle = `🔁 ${displayTitle}`;
     }
 
     const getSubtitle = () => {

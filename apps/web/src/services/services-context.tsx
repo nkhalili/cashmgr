@@ -4,20 +4,26 @@ import type { SqliteDatabase } from '@cashmgr/db';
 import { AppError, ErrorHandler } from '@cashmgr/core';
 import type { DatabaseAdapter } from '@cashmgr/core';
 import { AccountsService } from './accounts-service';
+import { BudgetsService } from './budgets-service';
 import { CategoriesService } from './categories-service';
 import { CurrenciesService } from './currencies-service';
 import { DashboardService } from './dashboard-service';
+import { RecurringTransactionsService } from './recurring-transactions-service';
 import { TransactionsService } from './transactions-service';
+import { CreditAutoPaymentService } from './credit-autopay-service';
 import { createWebSqliteDatabase } from '../database/web-sqlite-database';
 
 interface ServicesContextValue {
   database: SqliteDatabase;
   adapter: DatabaseAdapter;
   accountsService: AccountsService;
+  budgetsService: BudgetsService;
   categoriesService: CategoriesService;
   currenciesService: CurrenciesService;
   dashboardService: DashboardService;
+  recurringTransactionsService: RecurringTransactionsService;
   transactionsService: TransactionsService;
+  creditAutoPaymentService: CreditAutoPaymentService;
 }
 
 const ServicesContext = React.createContext<ServicesContextValue | null>(null);
@@ -37,14 +43,28 @@ export const ServicesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         if (!isMounted) return;
 
+        const transactionsService = new TransactionsService(adapter);
+        const recurringTransactionsService = new RecurringTransactionsService(adapter, transactionsService);
+        const creditAutoPaymentService = new CreditAutoPaymentService(adapter, transactionsService);
+
+        // Generate pending recurring transactions before making the app usable
+        // so the Settings > Recurring page always shows the current lastGeneratedDate.
+        await recurringTransactionsService.generateDueTransactions();
+
+        // Catch up on any due credit card auto-payments (same app-open pattern as above).
+        await creditAutoPaymentService.processDuePayments();
+
         setValue({
           database: db,
           adapter,
           accountsService: new AccountsService(adapter),
+          budgetsService: new BudgetsService(adapter),
           categoriesService: new CategoriesService(adapter),
           currenciesService: new CurrenciesService(adapter),
           dashboardService: new DashboardService(adapter),
-          transactionsService: new TransactionsService(adapter),
+          recurringTransactionsService,
+          transactionsService,
+          creditAutoPaymentService,
         });
       } catch (err) {
         // F-024: Use ErrorHandler for centralized error handling
@@ -108,6 +128,15 @@ export function useAccountsService(): AccountsService {
   return ctx.accountsService;
 }
 
+export function useBudgetsService(): BudgetsService {
+  const ctx = React.useContext(ServicesContext);
+  if (!ctx) {
+    throw new Error('ServicesProvider is missing from component tree.');
+  }
+
+  return ctx.budgetsService;
+}
+
 export function useCategoriesService(): CategoriesService {
   const ctx = React.useContext(ServicesContext);
   if (!ctx) {
@@ -135,6 +164,15 @@ export function useTransactionsService(): TransactionsService {
   return ctx.transactionsService;
 }
 
+export function useRecurringTransactionsService(): RecurringTransactionsService {
+  const ctx = React.useContext(ServicesContext);
+  if (!ctx) {
+    throw new Error('ServicesProvider is missing from component tree.');
+  }
+
+  return ctx.recurringTransactionsService;
+}
+
 export function useDashboardService(): DashboardService {
   const ctx = React.useContext(ServicesContext);
   if (!ctx) {
@@ -142,5 +180,14 @@ export function useDashboardService(): DashboardService {
   }
 
   return ctx.dashboardService;
+}
+
+export function useCreditAutoPaymentService(): CreditAutoPaymentService {
+  const ctx = React.useContext(ServicesContext);
+  if (!ctx) {
+    throw new Error('ServicesProvider is missing from component tree.');
+  }
+
+  return ctx.creditAutoPaymentService;
 }
 

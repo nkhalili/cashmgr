@@ -2,6 +2,7 @@ export * from './theme';
 export * from './Button';
 export * from './Input';
 export * from './DateInput';
+export * from './Switch';
 export * from './Card';
 export * from './ListItem';
 export * from './Tabs';
