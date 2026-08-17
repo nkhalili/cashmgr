@@ -1,11 +1,10 @@
 name: Release
 
 on:
-  pull_request:
-    types: [closed]
-    branches: [main]
   push:
-    tags: ['v*.*.*-*']
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
 
 env:
   REGISTRY: ghcr.io
@@ -13,8 +12,10 @@ env:
 
 jobs:
   # ── 1. Determine version and bump manifests ───────────────────────────────
-  #   Stable : triggered by merged PR from release/vx.y.z into main
-  #   Preview: triggered by pre-release tag push (v*.*.*-*) on release/vx.y.z
+  #   Stable : triggered by pushing a plain version tag (vx.y.z) on main, after
+  #            the release/vx.y.z → main PR has already been merged.
+  #   Preview: triggered by pushing a pre-release tag (vx.y.z-label) on release/vx.y.z.
+  #   Tags are always pushed by hand — Actions never creates a tag itself.
   version-bump:
     runs-on: ubuntu-latest
     permissions:
@@ -23,11 +24,6 @@ jobs:
       version: ${{ steps.set.outputs.version }}
       prerelease: ${{ steps.set.outputs.prerelease }}
       target: ${{ steps.set.outputs.target }}
-    if: >-
-      github.actor != 'cashmgr-bot[bot]' &&
-      (github.event_name == 'push' ||
-      (github.event.pull_request.merged == true &&
-      startsWith(github.event.pull_request.head.ref, 'release/')))
     steps:
       - name: Generate App Token
         id: generate_token
@@ -36,25 +32,22 @@ jobs:
           app-id: ${{ vars.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
-      # Determine version, prerelease flag, checkout ref, and push target before checkout.
-      # Stable : version from branch name (release/vx.y.z → x.y.z), checkout/push to main.
-      # Preview: version from tag (vx.y.z-label → x.y.z-label), checkout/push to release/vx.y.z.
+      # A tag with a "-" suffix (vx.y.z-label) is a preview, cut on the release
+      # branch. A plain vx.y.z tag is stable, cut on main.
       - id: set
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            REF="${{ github.event.pull_request.head.ref }}"
-            VERSION="${REF#release/v}"
-            echo "version=${VERSION}" >> $GITHUB_OUTPUT
-            echo "prerelease=false" >> $GITHUB_OUTPUT
-            echo "target=main" >> $GITHUB_OUTPUT
-            echo "checkout_ref=${{ github.base_ref }}" >> $GITHUB_OUTPUT
-          else
-            FULL_VERSION="${GITHUB_REF_NAME#v}"
+          FULL_VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "$FULL_VERSION" == *-* ]]; then
             BASE_VERSION="${FULL_VERSION%%-*}"
             echo "version=${FULL_VERSION}" >> $GITHUB_OUTPUT
             echo "prerelease=true" >> $GITHUB_OUTPUT
             echo "target=release/v${BASE_VERSION}" >> $GITHUB_OUTPUT
             echo "checkout_ref=release/v${BASE_VERSION}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${FULL_VERSION}" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "target=main" >> $GITHUB_OUTPUT
+            echo "checkout_ref=main" >> $GITHUB_OUTPUT
           fi
 
       - uses: actions/checkout@v4
