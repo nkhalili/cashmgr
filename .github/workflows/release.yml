@@ -6,6 +6,14 @@ on:
     branches: [main]
   push:
     tags: ['v*.*.*-*']
+  # TEMP: manual fallback for stable releases in case the pull_request(closed)
+  # trigger doesn't fire (seen when merging via a ruleset bypass). Remove once
+  # release/* → main merges consistently go through squash without bypass.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Stable version already merged into main, e.g. 1.0.0'
+        required: true
 
 env:
   REGISTRY: ghcr.io
@@ -26,6 +34,7 @@ jobs:
     if: >-
       github.actor != 'cashmgr-bot[bot]' &&
       (github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged == true &&
       startsWith(github.event.pull_request.head.ref, 'release/')))
     steps:
@@ -48,6 +57,11 @@ jobs:
             echo "prerelease=false" >> $GITHUB_OUTPUT
             echo "target=main" >> $GITHUB_OUTPUT
             echo "checkout_ref=${{ github.base_ref }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "target=main" >> $GITHUB_OUTPUT
+            echo "checkout_ref=main" >> $GITHUB_OUTPUT
           else
             FULL_VERSION="${GITHUB_REF_NAME#v}"
             BASE_VERSION="${FULL_VERSION%%-*}"
