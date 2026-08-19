@@ -444,6 +444,7 @@ Tests are co-located in `__tests__/` next to each repository, using in-memory SQ
 - Electron; the renderer loads the built `apps/web` bundle via a custom `app://` protocol (so it shares the web app's OPFS-backed SQLite and `WebFileLogger`)
 - `better-sqlite3` is present for a future native adapter but is currently unused — the renderer uses the web SQLite stack instead
 - Main process (`apps/desktop/src/main.ts`) has its own `DesktopFileLogger` and top-level `uncaughtException`/`unhandledRejection` handlers, since it runs in a separate Node process from the renderer
+- `webContents.setWindowOpenHandler` forwards any renderer `target="_blank"` link (GitHub, `mailto:`, etc.) to `shell.openExternal` and denies in-app window creation — without it Electron silently drops the click
 - No test suite yet (no Jest/Vitest config) — main-process code is currently untested
 
 ---

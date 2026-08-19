@@ -15,6 +15,7 @@ import { SettingsCsv } from './pages/SettingsCsv';
 import { SettingsLogs } from './pages/SettingsLogs';
 import { SettingsDevelopment } from './pages/SettingsDevelopment';
 import { SettingsAbout } from './pages/SettingsAbout';
+import { SettingsReportBug } from './pages/SettingsReportBug';
 import { SettingsRecurringTransactions } from './pages/SettingsRecurringTransactions';
 import { SettingsRecurringEdit } from './pages/SettingsRecurringEdit';
 import { useThemePreference, ThemePreference } from './contexts/theme-context';
@@ -152,6 +153,7 @@ export const App: React.FC = () => {
             <Route path="/settings/recurring/:id/edit" element={<SettingsRecurringEdit />} />
             <Route path="/settings/development" element={<SettingsDevelopment />} />
             <Route path="/settings/about" element={<SettingsAbout />} />
+            <Route path="/settings/report-bug" element={<SettingsReportBug />} />
           </Routes>
         </main>
       </div>

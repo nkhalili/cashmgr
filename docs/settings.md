@@ -40,3 +40,11 @@ CashMgr keeps a local log of application errors on your device to help diagnose 
 2. Tap **Share Log File** on mobile to open the share sheet, or **Download Log File** on web/desktop to save the file
 
 Share this file when reporting a bug. If nothing has gone wrong yet, the log will be empty and the button disabled.
+
+## Report a Bug
+
+1. Go to **Settings → Report a Bug**
+2. Tap **Email Us** to open your email app with a message pre-addressed to `cashmgr.support@gmail.com`, pre-filled with your app version and platform
+3. Describe the bug and steps to reproduce it, then send
+
+If you'd rather compose the email yourself, the address is also shown on the page with a **Copy** button.

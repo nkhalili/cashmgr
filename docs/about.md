@@ -14,6 +14,8 @@ Access **Settings → About** on any platform to find:
 - **Sponsor on GitHub** — support the project via GitHub Sponsors.
 - **Buy Me a Coffee** — one-time donation via buymeacoffee.com.
 
+Prefer email over GitHub? Use **Settings → Report a Bug** instead — see [Settings & Data Management](settings.md#report-a-bug).
+
 ## Desktop Help Menu
 
 On desktop, the same links are also available from the **Help** menu in the menu bar, along with:

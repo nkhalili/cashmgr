@@ -125,6 +125,12 @@ export default function SettingsScreen() {
           route: '/settings-about',
           icon: 'information-circle-outline',
         },
+        {
+          label: 'Report a Bug',
+          subtitle: 'Email us the details',
+          route: '/settings-report-bug',
+          icon: 'bug-outline',
+        },
       ],
     },
     ...(isDevelopment

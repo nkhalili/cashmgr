@@ -19,6 +19,7 @@ CashMgr is a local-first personal finance app. The local version is free, ad-fre
 | Recurring Transactions | 10 frequencies (daily through annually); on-startup generation; enable/edit from Add or Edit Transaction, manage via Settings |
 | Credit Card Statement & Auto-Pay | Statement/payment day, Balance Payable & Outstanding Balance on Accounts page, optional auto-pay (full or fixed amount) from a linked account |
 | Local Error Logging | Per-platform local file logger with global error/rejection capture; shareable from Settings → Logs. Local-only by design — no remote crash reporting |
+| Report a Bug | Settings → Report a Bug opens a pre-filled `mailto:` to the support address (app version + platform included); email also shown with a Copy button |
 
 ---
 

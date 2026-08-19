@@ -65,6 +65,7 @@ export function Settings() {
       header: 'App',
       rows: [
         { label: 'About', subtitle: `v${__APP_VERSION__}`, route: '/settings/about', icon: 'ℹ️' },
+        { label: 'Report a Bug', subtitle: 'Email us the details', route: '/settings/report-bug', icon: '🐛' },
       ],
     },
     ...(isDevelopment

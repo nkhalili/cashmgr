@@ -198,6 +198,13 @@ function createWindow() {
     },
   });
 
+  // Renderer links use target="_blank" (GitHub, mailto:, etc.) — without this handler
+  // Electron denies new-window creation by default and the click does nothing.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
   if (process.env.NODE_ENV === 'development') {
     const devPort = process.env.VITE_PORT || '3000';
     mainWindow.loadURL(`http://localhost:${devPort}`);
