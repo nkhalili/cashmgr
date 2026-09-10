@@ -204,8 +204,13 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      - name: Write App Store Connect API key
+        run: echo "${{ secrets.ASC_API_KEY_P8 }}" > "$RUNNER_TEMP/asc-api-key.p8"
+
       - name: Build iOS + Android via EAS
-        run: pnpm --filter @cashmgr/mobile exec eas build --platform all --profile production --non-interactive --auto-submit
+        run: pnpm --filter @cashmgr/mobile exec eas env:exec --environment production 'eas build --platform all --profile production --non-interactive --auto-submit'
+        env:
+          ASC_API_KEY: ${{ runner.temp }}/asc-api-key.p8
 
   # ── 4b. Build preview mobile apps via EAS — preview only ─────────────────
   mobile-preview:
