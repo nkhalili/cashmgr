@@ -136,7 +136,7 @@ jobs:
 
   # ── 3b. Build desktop installer (macOS DMG) ───────────────────────────────
   desktop-macos:
-    runs-on: macos-latest
+    runs-on: macos-15
     needs: version-bump
     permissions:
       contents: write
@@ -208,7 +208,7 @@ jobs:
         run: echo "${{ secrets.ASC_API_KEY_P8 }}" > "$RUNNER_TEMP/asc-api-key.p8"
 
       - name: Build iOS + Android via EAS
-        run: pnpm --filter @cashmgr/mobile exec eas env:exec --environment production 'eas build --platform all --profile production --non-interactive --auto-submit'
+        run: pnpm --filter @cashmgr/mobile exec eas env:exec production 'eas build --platform all --profile production --non-interactive --auto-submit' --non-interactive
         env:
           ASC_API_KEY: ${{ runner.temp }}/asc-api-key.p8
 
