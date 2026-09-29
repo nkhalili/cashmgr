@@ -205,7 +205,9 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Write App Store Connect API key
-        run: echo "${{ secrets.ASC_API_KEY_P8 }}" > "$RUNNER_TEMP/asc-api-key.p8"
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: printf '%s\n' "$ASC_API_KEY_P8" > "$RUNNER_TEMP/asc-api-key.p8"
 
       - name: Build iOS + Android via EAS
         run: pnpm --filter @cashmgr/mobile exec eas env:exec production 'eas build --platform all --profile production --non-interactive --auto-submit' --non-interactive
